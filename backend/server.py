@@ -203,7 +203,7 @@ async def get_dashboard(user_id: str = Depends(get_current_user)):
     readings = await db.energy_readings.find({
         "user_id": user_id,
         "timestamp": {"$gte": thirty_days_ago}
-    }).sort("timestamp", -1).to_list(30)
+    }, {"_id": 0}).sort("timestamp", -1).to_list(30)
     
     # Calculate totals
     total_consumption = sum(r["consumption_kwh"] for r in readings)
