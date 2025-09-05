@@ -391,11 +391,8 @@ class EnergoBackendTester:
         
         # Test authentication flow
         registration_success = self.test_user_registration()
-        if not registration_success:
-            # If registration failed, try login
-            login_success = self.test_user_login()
-        else:
-            login_success = True
+        # Always try login to get token for protected endpoint tests
+        login_success = self.test_user_login()
             
         # Test invalid login
         self.test_invalid_login()
