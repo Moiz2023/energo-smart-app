@@ -199,7 +199,7 @@ export default function AIAssistant() {
                 <Text style={styles.achievementText}>High Usage Days</Text>
               </View>
             </View>
-          </LinearGradient>
+          </View>
         )}
 
         {/* AI Insights */}
