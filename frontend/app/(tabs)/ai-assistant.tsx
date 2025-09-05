@@ -169,7 +169,7 @@ export default function AIAssistant() {
 
         {/* Personal Analysis Summary */}
         {data.patterns && (
-          <View style={styles.analysisCard}>
+          <LinearGradient colors={['#1a1a1a', '#2a2a2a']} style={styles.analysisCard}>
             <Text style={styles.analysisTitle}>Your Energy Profile</Text>
             
             <View style={styles.analysisRow}>
