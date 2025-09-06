@@ -370,14 +370,41 @@ const styles = StyleSheet.create({
     fontSize: 12,
     textAlign: 'center',
   },
+  trendContainer: {
+    marginBottom: 16,
+  },
   trendMessage: {
     color: '#fff',
     fontSize: 14,
     textAlign: 'center',
-    marginBottom: 16,
     padding: 12,
     backgroundColor: '#333',
     borderRadius: 8,
+  },
+  peakInsightContainer: {
+    backgroundColor: '#1B5E20',
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: '#4CAF50',
+  },
+  peakInsightTitle: {
+    color: '#4CAF50',
+    fontSize: 14,
+    fontWeight: 'bold',
+    marginBottom: 8,
+  },
+  peakInsightText: {
+    color: '#A5D6A7',
+    fontSize: 13,
+    lineHeight: 18,
+    marginBottom: 8,
+  },
+  peakSavingsText: {
+    color: '#4CAF50',
+    fontSize: 12,
+    fontWeight: 'bold',
   },
   achievementRow: {
     flexDirection: 'row',
