@@ -151,22 +151,47 @@ export default function Settings() {
     }
   };
 
-  const handleLogout = async () => {
+  const handleLogout = () => {
     Alert.alert(
-      'Logout',
-      'Are you sure you want to logout?',
+      'Sign Out',
+      'Are you sure you want to sign out?',
       [
         { text: 'Cancel', style: 'cancel' },
         {
-          text: 'Logout',
+          text: 'Sign Out',
           style: 'destructive',
           onPress: async () => {
             try {
-              await AsyncStorage.removeItem('energo_token');
-              await AsyncStorage.removeItem('energo_user');
+              // Call logout endpoint
+              const token = await AsyncStorage.getItem('energo_token');
+              if (token) {
+                try {
+                  await fetch(`${BACKEND_URL}/api/auth/logout`, {
+                    method: 'POST',
+                    headers: {
+                      'Authorization': `Bearer ${token}`,
+                      'Content-Type': 'application/json',
+                    },
+                  });
+                } catch (error) {
+                  console.log('Logout API call failed, continuing with local logout');
+                }
+              }
+              
+              // Clear local storage
+              await AsyncStorage.multiRemove(['energo_token', 'energo_user']);
+              
+              // Navigate to login screen
               router.replace('/');
             } catch (error) {
               console.error('Logout error:', error);
+              // Even if there's an error, still try to clear storage and navigate
+              try {
+                await AsyncStorage.multiRemove(['energo_token', 'energo_user']);
+                router.replace('/');
+              } catch (clearError) {
+                console.error('Failed to clear storage:', clearError);
+              }
             }
           },
         },
