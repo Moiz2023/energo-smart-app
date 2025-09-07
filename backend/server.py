@@ -47,6 +47,7 @@ class UserSettings(BaseModel):
     high_usage_alerts: bool = True
     weekly_summary: bool = True
     subscription_plan: str = "free"  # free, premium
+    region: str = "brussels"  # brussels, wallonia, flanders
 
 class User(BaseModel):
     id: str
@@ -57,6 +58,7 @@ class User(BaseModel):
     total_consumption: float = 0.0
     current_month_consumption: float = 0.0
     badges: List[str] = []
+    house_size_m2: float = 150.0  # Default house size for subsidy calculations
 
 class EnergyReading(BaseModel):
     id: str = Field(default_factory=lambda: str(uuid.uuid4()))
@@ -76,23 +78,180 @@ class AIInsight(BaseModel):
     priority: str = "medium"  # low, medium, high
     personalized: bool = True
 
-class Challenge(BaseModel):
-    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+class SubsidyInfo(BaseModel):
+    id: str
     title: str
     description: str
-    target_value: float
-    current_progress: float
-    deadline: datetime
-    reward_badge: str
-    active: bool = True
+    region: str  # brussels, wallonia, flanders
+    amount: str
+    eligibility: List[str]
+    application_process: str
+    deadline: Optional[str] = None
+    potential_savings: str
+    category: str  # insulation, heating, solar, renovation
 
-class Badge(BaseModel):
-    id: str
-    name: str
-    description: str
-    icon: str
-    unlocked_at: Optional[datetime] = None
-    category: str = "energy_saving"
+# Belgian Energy Subsidies Database
+BELGIAN_SUBSIDIES = {
+    "brussels": [
+        {
+            "id": "brussels_insulation",
+            "title": "Prime Isolation (Insulation Subsidy)",
+            "description": "Financial support for thermal insulation works in Brussels",
+            "region": "brussels",
+            "amount": "Up to €15/m² for roof insulation, €25/m² for walls",
+            "eligibility": [
+                "Property in Brussels-Capital Region",
+                "Building older than 10 years",
+                "Income conditions apply",
+                "Professional installer required"
+            ],
+            "application_process": "Apply online at homegrade.brussels before starting works",
+            "deadline": "Ongoing program, budget availability",
+            "potential_savings": "€300-1200/year on heating costs",
+            "category": "insulation"
+        },
+        {
+            "id": "brussels_heating",
+            "title": "Prime Chauffage (Heating System Subsidy)",
+            "description": "Support for efficient heating system replacement",
+            "region": "brussels",
+            "amount": "€1000-4000 depending on system type",
+            "eligibility": [
+                "Replacement of old heating system (>15 years)",
+                "High-efficiency equipment required",
+                "Property in Brussels",
+                "Income-based conditions"
+            ],
+            "application_process": "Submit application with quotes and technical specifications",
+            "deadline": "Apply before installation",
+            "potential_savings": "€400-800/year on energy bills",
+            "category": "heating"
+        },
+        {
+            "id": "brussels_solar",
+            "title": "Prime Photovoltaïque (Solar Panel Subsidy)",
+            "description": "Financial incentive for solar panel installation",
+            "region": "brussels",
+            "amount": "€350/kWc installed (max 3kWc)",
+            "eligibility": [
+                "First-time solar installation",
+                "Property in Brussels",
+                "Certified installer required",
+                "Technical pre-approval needed"
+            ],
+            "application_process": "Apply at homegrade.brussels with installer quote",
+            "deadline": "Subject to annual budget allocation",
+            "potential_savings": "€200-500/year in reduced electricity bills",
+            "category": "solar"
+        }
+    ],
+    "wallonia": [
+        {
+            "id": "wallonia_insulation",
+            "title": "Prime Habitation (Housing Subsidy)",
+            "description": "Comprehensive renovation support including insulation",
+            "region": "wallonia",
+            "amount": "Up to €20/m² for insulation works",
+            "eligibility": [
+                "Property in Wallonia region",
+                "Building >15 years old",
+                "Household income conditions",
+                "Minimum R-value requirements"
+            ],
+            "application_process": "Apply online at energie.wallonie.be",
+            "deadline": "Applications accepted year-round",
+            "potential_savings": "€500-1500/year on heating costs",
+            "category": "insulation"
+        },
+        {
+            "id": "wallonia_heat_pump",
+            "title": "Prime Pompe à Chaleur (Heat Pump Subsidy)",
+            "description": "Incentive for heat pump installation",
+            "region": "wallonia",
+            "amount": "€1500-6000 based on performance and income",
+            "eligibility": [
+                "Replacement of fossil fuel heating",
+                "Minimum COP performance requirements",
+                "Professional installation mandatory",
+                "Property in Wallonia"
+            ],
+            "application_process": "Pre-approval required, apply with certified installer",
+            "deadline": "Ongoing, subject to budget",
+            "potential_savings": "€600-1200/year on heating costs",
+            "category": "heating"
+        },
+        {
+            "id": "wallonia_renovation",
+            "title": "Prime Rénovation Globale (Global Renovation)",
+            "description": "Comprehensive renovation package with multiple measures",
+            "region": "wallonia",
+            "amount": "Up to €10,000 for comprehensive renovation",
+            "eligibility": [
+                "Combination of insulation, heating, ventilation",
+                "Significant energy performance improvement",
+                "Professional energy audit required",
+                "Income-based additional bonuses"
+            ],
+            "application_process": "Energy audit first, then application with renovation plan",
+            "deadline": "Limited budget per year",
+            "potential_savings": "€800-2000/year on energy bills",
+            "category": "renovation"
+        }
+    ],
+    "flanders": [
+        {
+            "id": "flanders_renovation",
+            "title": "Mijn VerbouwPremie (My Renovation Subsidy)",
+            "description": "Flemish renovation subsidies for energy improvements",
+            "region": "flanders",
+            "amount": "€2.5-10/m² for insulation, up to €2500 for heating",
+            "eligibility": [
+                "Property in Flanders",
+                "Building permit may be required",
+                "Income conditions for higher amounts",
+                "Technical requirements must be met"
+            ],
+            "application_process": "Apply at mijnverbouwpremie.be before starting works",
+            "deadline": "Applications must be submitted before works begin",
+            "potential_savings": "€400-1000/year on energy costs",
+            "category": "renovation"
+        },
+        {
+            "id": "flanders_insulation",
+            "title": "Isolatiepremie (Insulation Premium)",
+            "description": "Specific support for thermal insulation improvements",
+            "region": "flanders",
+            "amount": "€6/m² for roof, €8/m² for walls (income-dependent)",
+            "eligibility": [
+                "Property in Flemish region",
+                "Minimum insulation performance requirements",
+                "Professional installation required",
+                "Building older than 5 years"
+            ],
+            "application_process": "Online application with technical documentation",
+            "deadline": "Ongoing program with annual budget limits",
+            "potential_savings": "€300-900/year on heating bills",
+            "category": "insulation"
+        },
+        {
+            "id": "flanders_solar",
+            "title": "Zonnepanelen Subsidie (Solar Panel Subsidy)",
+            "description": "Support for residential solar installations",
+            "region": "flanders",
+            "amount": "Net metering + installation grants up to €1500",
+            "eligibility": [
+                "Residential property in Flanders",
+                "Grid connection available",
+                "Certified equipment and installer",
+                "Maximum capacity limits apply"
+            ],
+            "application_process": "Apply through energy supplier and regional authorities",
+            "deadline": "Ongoing with periodic policy reviews",
+            "potential_savings": "€300-700/year in electricity savings",
+            "category": "solar"
+        }
+    ]
+}
 
 # Helper functions
 def hash_password(password: str) -> str:
@@ -236,6 +395,55 @@ def analyze_consumption_patterns(readings: List[Dict]) -> Dict:
         "efficient_days": len([r for r in readings if r["consumption_kwh"] < avg_daily * 0.8])
     }
 
+def calculate_subsidy_savings(user_patterns: Dict, user_region: str, house_size: float) -> List[Dict]:
+    """Calculate personalized subsidy savings based on user's energy profile"""
+    subsidies = BELGIAN_SUBSIDIES.get(user_region, [])
+    personalized_subsidies = []
+    
+    avg_annual_cost = user_patterns.get("avg_daily_cost", 3.5) * 365
+    
+    for subsidy in subsidies:
+        personalized_subsidy = subsidy.copy()
+        
+        # Calculate personalized savings based on category
+        if subsidy["category"] == "insulation":
+            # Insulation savings: 20-30% of heating costs (assume 60% of total is heating)
+            heating_cost = avg_annual_cost * 0.6
+            estimated_savings = heating_cost * 0.25  # 25% average savings
+            personalized_subsidy["your_savings"] = f"€{int(estimated_savings)}/year"
+            personalized_subsidy["payback_period"] = "3-5 years"
+            
+            # Calculate subsidy amount based on house size
+            if "€" in subsidy["amount"] and "/m²" in subsidy["amount"]:
+                rate = float(subsidy["amount"].split("€")[1].split("/m²")[0])
+                total_subsidy = int(rate * house_size)
+                personalized_subsidy["your_subsidy"] = f"€{total_subsidy} (for {house_size}m²)"
+            
+        elif subsidy["category"] == "heating":
+            # Heat pump/heating savings: 30-50% of heating costs
+            heating_cost = avg_annual_cost * 0.6
+            estimated_savings = heating_cost * 0.4  # 40% average savings
+            personalized_subsidy["your_savings"] = f"€{int(estimated_savings)}/year"
+            personalized_subsidy["payback_period"] = "4-6 years"
+            
+        elif subsidy["category"] == "solar":
+            # Solar savings: based on roof capacity (assume 3kWp average)
+            annual_production = 3000  # kWh for 3kWp system in Belgium
+            electricity_rate = 0.25
+            estimated_savings = annual_production * electricity_rate
+            personalized_subsidy["your_savings"] = f"€{int(estimated_savings)}/year"
+            personalized_subsidy["payback_period"] = "6-8 years"
+            
+        elif subsidy["category"] == "renovation":
+            # Comprehensive renovation: 40-60% total energy savings
+            estimated_savings = avg_annual_cost * 0.5  # 50% average savings
+            personalized_subsidy["your_savings"] = f"€{int(estimated_savings)}/year"
+            personalized_subsidy["payback_period"] = "5-8 years"
+        
+        personalized_subsidies.append(personalized_subsidy)
+    
+    return personalized_subsidies
+
 def generate_personalized_insights(user_patterns: Dict, user_id: str) -> List[Dict]:
     """Generate personalized AI insights based on user's consumption patterns"""
     insights = []
@@ -333,7 +541,8 @@ async def register(user_data: UserCreate):
         "settings": UserSettings().dict(),
         "total_consumption": 0.0,
         "current_month_consumption": 0.0,
-        "badges": []
+        "badges": [],
+        "house_size_m2": 150.0  # Default house size
     }
     
     await db.users.insert_one(user_doc)
@@ -373,6 +582,12 @@ async def login(login_data: UserLogin):
             "settings": user.get("settings", UserSettings().dict())
         }
     }
+
+# Logout endpoint
+@api_router.post("/auth/logout")
+async def logout(user_id: str = Depends(get_current_user)):
+    """Logout endpoint - client should remove token locally"""
+    return {"message": "Logged out successfully"}
 
 # Enhanced Dashboard endpoint
 @api_router.get("/dashboard")
@@ -509,9 +724,17 @@ async def get_dashboard(period: str = "week", user_id: str = Depends(get_current
         "patterns": patterns
     }
 
-# Enhanced AI Assistant endpoint
+# Enhanced AI Assistant endpoint with subsidies
 @api_router.get("/ai-insights")
 async def get_ai_insights(user_id: str = Depends(get_current_user)):
+    # Get user data including settings
+    user = await db.users.find_one({"id": user_id})
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    
+    user_region = user.get("settings", {}).get("region", "brussels")
+    house_size = user.get("house_size_m2", 150.0)
+    
     # Get user's recent consumption data
     thirty_days_ago = datetime.utcnow() - timedelta(days=30)
     readings = await db.energy_readings.find({
@@ -525,7 +748,51 @@ async def get_ai_insights(user_id: str = Depends(get_current_user)):
     # Generate personalized insights
     insights = generate_personalized_insights(patterns, user_id)
     
-    return {"insights": insights, "patterns": patterns}
+    # Get personalized subsidies
+    subsidies = calculate_subsidy_savings(patterns, user_region, house_size)
+    
+    return {
+        "insights": insights, 
+        "patterns": patterns,
+        "subsidies": subsidies,
+        "region": user_region
+    }
+
+# Subsidies endpoint
+@api_router.get("/subsidies")
+async def get_subsidies(region: str = None, user_id: str = Depends(get_current_user)):
+    # Get user data if region not specified
+    if not region:
+        user = await db.users.find_one({"id": user_id})
+        if user:
+            region = user.get("settings", {}).get("region", "brussels")
+        else:
+            region = "brussels"
+    
+    # Get subsidies for the specified region
+    subsidies = BELGIAN_SUBSIDIES.get(region, [])
+    
+    # Get user patterns for personalized calculations
+    thirty_days_ago = datetime.utcnow() - timedelta(days=30)
+    readings = await db.energy_readings.find({
+        "user_id": user_id,
+        "timestamp": {"$gte": thirty_days_ago}
+    }, {"_id": 0}).to_list(100)
+    
+    patterns = analyze_consumption_patterns(readings)
+    
+    # Get user house size
+    user = await db.users.find_one({"id": user_id})
+    house_size = user.get("house_size_m2", 150.0) if user else 150.0
+    
+    # Calculate personalized savings
+    personalized_subsidies = calculate_subsidy_savings(patterns, region, house_size)
+    
+    return {
+        "subsidies": personalized_subsidies,
+        "region": region,
+        "available_regions": list(BELGIAN_SUBSIDIES.keys())
+    }
 
 # Challenges endpoint
 @api_router.get("/challenges")
@@ -603,6 +870,14 @@ async def get_badges(user_id: str = Depends(get_current_user)):
             "unlocked_at": datetime.utcnow() - timedelta(days=1)
         },
         {
+            "id": "subsidy_explorer",
+            "name": "Subsidy Explorer",
+            "description": "Explored available energy subsidies",
+            "icon": "💰",
+            "category": "savings",
+            "unlocked_at": datetime.utcnow() - timedelta(hours=2)
+        },
+        {
             "id": "efficiency_expert",
             "name": "Efficiency Expert",
             "description": "Achieved 20% energy reduction",
@@ -616,14 +891,6 @@ async def get_badges(user_id: str = Depends(get_current_user)):
             "description": "Maintained low usage for 30 days",
             "icon": "🏆",
             "category": "achievement",
-            "unlocked_at": None
-        },
-        {
-            "id": "cost_cutter",
-            "name": "Cost Cutter",
-            "description": "Saved €50 in a single month",
-            "icon": "💰",
-            "category": "savings",
             "unlocked_at": None
         }
     ]
@@ -677,7 +944,8 @@ async def get_subscription_info(user_id: str = Depends(get_current_user)):
                 "Basic energy tracking",
                 "Weekly summaries",
                 "3 AI insights per week",
-                "Basic badges"
+                "Basic badges",
+                "Regional subsidies overview"
             ],
             "limitations": [
                 "Limited historical data (30 days)",
@@ -690,6 +958,8 @@ async def get_subscription_info(user_id: str = Depends(get_current_user)):
             "features": [
                 "Advanced energy analytics",
                 "Unlimited AI insights",
+                "Live subsidy updates",
+                "Personalized subsidy calculator",
                 "Predictive forecasting",
                 "Custom challenges",
                 "All badges & achievements",
@@ -712,6 +982,14 @@ async def get_notifications(user_id: str = Depends(get_current_user)):
     notifications = [
         {
             "id": str(uuid.uuid4()),
+            "title": "New Subsidy Available!",
+            "message": "A new insulation subsidy is available in your region. Check AI Assistant for details.",
+            "type": "subsidy",
+            "timestamp": datetime.utcnow() - timedelta(hours=1),
+            "read": False
+        },
+        {
+            "id": str(uuid.uuid4()),
             "title": "High Usage Alert",
             "message": "Your energy usage is 15% higher than usual today. Check your heating settings.",
             "type": "alert",
@@ -729,17 +1007,9 @@ async def get_notifications(user_id: str = Depends(get_current_user)):
         {
             "id": str(uuid.uuid4()),
             "title": "New Badge Earned!",
-            "message": "Congratulations! You've unlocked the 'Week Warrior' badge for consistent energy savings.",
+            "message": "Congratulations! You've unlocked the 'Subsidy Explorer' badge for checking available subsidies.",
             "type": "achievement",
             "timestamp": datetime.utcnow() - timedelta(days=2),
-            "read": True
-        },
-        {
-            "id": str(uuid.uuid4()),
-            "title": "Challenge Update",
-            "message": "You're 80% of the way to completing the Evening Energy Challenge. Keep it up!",
-            "type": "challenge",
-            "timestamp": datetime.utcnow() - timedelta(days=3),
             "read": True
         }
     ]

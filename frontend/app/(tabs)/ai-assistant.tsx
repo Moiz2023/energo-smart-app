@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   View,
   Text,
@@ -8,11 +8,13 @@ import {
   ActivityIndicator,
   Alert,
   Dimensions,
+  RefreshControl,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { router } from 'expo-router';
+import { useFocusEffect } from '@react-navigation/native';
 
 const { width } = Dimensions.get('window');
 const BACKEND_URL = process.env.EXPO_PUBLIC_BACKEND_URL;
@@ -27,8 +29,25 @@ interface AIInsight {
   personalized: boolean;
 }
 
+interface Subsidy {
+  id: string;
+  title: string;
+  description: string;
+  region: string;
+  amount: string;
+  eligibility: string[];
+  application_process: string;
+  deadline?: string;
+  potential_savings: string;
+  category: string;
+  your_savings?: string;
+  your_subsidy?: string;
+  payback_period?: string;
+}
+
 interface AIAssistantData {
   insights: AIInsight[];
+  subsidies: Subsidy[];
   patterns: {
     avg_daily_kwh: number;
     avg_daily_cost: number;
@@ -37,18 +56,31 @@ interface AIAssistantData {
     high_consumption_days: number;
     efficient_days: number;
   };
+  region: string;
 }
 
 export default function AIAssistant() {
   const [data, setData] = useState<AIAssistantData | null>(null);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [activeTab, setActiveTab] = useState<'insights' | 'subsidies'>('insights');
+  const [error, setError] = useState<string>('');
 
-  useEffect(() => {
-    fetchAIInsights();
-  }, []);
+  useFocusEffect(
+    useCallback(() => {
+      fetchAIInsights();
+    }, [])
+  );
 
-  const fetchAIInsights = async () => {
+  const fetchAIInsights = async (isRefresh = false) => {
     try {
+      if (isRefresh) {
+        setRefreshing(true);
+      } else {
+        setLoading(true);
+      }
+      setError('');
+
       const token = await AsyncStorage.getItem('energo_token');
       if (!token) {
         router.replace('/');
@@ -60,6 +92,7 @@ export default function AIAssistant() {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json',
         },
+        timeout: 10000,
       });
 
       if (response.status === 401) {
@@ -71,14 +104,19 @@ export default function AIAssistant() {
         const responseData = await response.json();
         setData(responseData);
       } else {
-        Alert.alert('Error', 'Failed to load AI insights');
+        setError('Failed to load AI insights. Please try again.');
       }
     } catch (error) {
       console.error('Error fetching AI insights:', error);
-      Alert.alert('Error', 'Network error. Please try again.');
+      setError('Network error. Please check your connection and try again.');
     } finally {
       setLoading(false);
+      setRefreshing(false);
     }
+  };
+
+  const onRefresh = () => {
+    fetchAIInsights(true);
   };
 
   const getPriorityColor = (priority: string) => {
@@ -116,8 +154,27 @@ export default function AIAssistant() {
         return '📱';
       case 'appliances':
         return '🏠';
+      case 'insulation':
+        return '🏠';
+      case 'solar':
+        return '☀️';
+      case 'renovation':
+        return '🔨';
       default:
         return '💡';
+    }
+  };
+
+  const getRegionFlag = (region: string) => {
+    switch (region) {
+      case 'brussels':
+        return '🏛️';
+      case 'wallonia':
+        return '🌲';
+      case 'flanders':
+        return '🦁';
+      default:
+        return '🇧🇪';
     }
   };
 
@@ -134,23 +191,24 @@ export default function AIAssistant() {
     }
   };
 
-  if (loading) {
+  if (loading && !data) {
     return (
       <SafeAreaView style={styles.container}>
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color="#4CAF50" />
           <Text style={styles.loadingText}>Loading AI insights...</Text>
+          <Text style={styles.loadingSubtext}>Analyzing your energy patterns & available subsidies</Text>
         </View>
       </SafeAreaView>
     );
   }
 
-  if (!data) {
+  if (error && !data) {
     return (
       <SafeAreaView style={styles.container}>
         <View style={styles.errorContainer}>
-          <Text style={styles.errorText}>Failed to load AI insights</Text>
-          <TouchableOpacity style={styles.retryButton} onPress={fetchAIInsights}>
+          <Text style={styles.errorText}>⚠️ {error}</Text>
+          <TouchableOpacity style={styles.retryButton} onPress={() => fetchAIInsights()}>
             <Text style={styles.retryButtonText}>Retry</Text>
           </TouchableOpacity>
         </View>
@@ -160,15 +218,40 @@ export default function AIAssistant() {
 
   return (
     <SafeAreaView style={styles.container}>
-      <ScrollView showsVerticalScrollIndicator={false}>
+      <ScrollView 
+        showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#4CAF50" />
+        }
+      >
         {/* Header */}
         <View style={styles.header}>
           <Text style={styles.title}>🤖 AI Energy Assistant</Text>
-          <Text style={styles.subtitle}>Personalized insights to save energy</Text>
+          <Text style={styles.subtitle}>Personalized insights & subsidies for {data?.region || 'Belgium'} {getRegionFlag(data?.region || 'brussels')}</Text>
+        </View>
+
+        {/* Tab Selector */}
+        <View style={styles.tabContainer}>
+          <TouchableOpacity
+            style={[styles.tab, activeTab === 'insights' && styles.activeTab]}
+            onPress={() => setActiveTab('insights')}
+          >
+            <Text style={[styles.tabText, activeTab === 'insights' && styles.activeTabText]}>
+              💡 AI Insights
+            </Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.tab, activeTab === 'subsidies' && styles.activeTab]}
+            onPress={() => setActiveTab('subsidies')}
+          >
+            <Text style={[styles.tabText, activeTab === 'subsidies' && styles.activeTabText]}>
+              💰 Subsidies
+            </Text>
+          </TouchableOpacity>
         </View>
 
         {/* Personal Analysis Summary */}
-        {data.patterns && (
+        {data?.patterns && (
           <LinearGradient colors={['#1a1a1a', '#2a2a2a']} style={styles.analysisCard}>
             <Text style={styles.analysisTitle}>📊 Your Energy Profile</Text>
             
@@ -216,68 +299,124 @@ export default function AIAssistant() {
           </LinearGradient>
         )}
 
-        {/* AI Insights */}
-        <View style={styles.insightsContainer}>
-          <Text style={styles.sectionTitle}>💡 Personalized Insights</Text>
-          
-          {data.insights.map((insight, index) => (
-            <View key={insight.id} style={styles.insightCard}>
-              <View style={styles.insightHeader}>
-                <View style={styles.insightTitleRow}>
-                  <Text style={styles.categoryIcon}>{getCategoryIcon(insight.category)}</Text>
-                  <Text style={styles.insightTitle}>{insight.title}</Text>
-                </View>
-                <View style={styles.insightMeta}>
-                  <View 
-                    style={[
-                      styles.priorityBadge, 
-                      { backgroundColor: getPriorityColor(insight.priority) }
-                    ]}
-                  >
-                    <Text style={styles.priorityText}>{insight.priority.toUpperCase()}</Text>
+        {/* AI Insights Tab */}
+        {activeTab === 'insights' && data?.insights && (
+          <View style={styles.tabContent}>
+            <Text style={styles.sectionTitle}>💡 Personalized Insights</Text>
+            
+            {data.insights.map((insight, index) => (
+              <View key={insight.id} style={styles.insightCard}>
+                <View style={styles.insightHeader}>
+                  <View style={styles.insightTitleRow}>
+                    <Text style={styles.categoryIcon}>{getCategoryIcon(insight.category)}</Text>
+                    <Text style={styles.insightTitle}>{insight.title}</Text>
                   </View>
-                  {insight.personalized && (
-                    <View style={styles.personalizedBadge}>
-                      <Text style={styles.personalizedText}>PERSONAL</Text>
+                  <View style={styles.insightMeta}>
+                    <View 
+                      style={[
+                        styles.priorityBadge, 
+                        { backgroundColor: getPriorityColor(insight.priority) }
+                      ]}
+                    >
+                      <Text style={styles.priorityText}>{insight.priority.toUpperCase()}</Text>
                     </View>
+                    {insight.personalized && (
+                      <View style={styles.personalizedBadge}>
+                        <Text style={styles.personalizedText}>PERSONAL</Text>
+                      </View>
+                    )}
+                  </View>
+                </View>
+                
+                <Text style={styles.insightContent}>{insight.content}</Text>
+                
+                <View style={styles.insightFooter}>
+                  <Text style={styles.savingsText}>💰 Potential savings: {insight.potential_savings}</Text>
+                  <TouchableOpacity style={styles.actionButton}>
+                    <Text style={styles.actionButtonText}>Learn More</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+            ))}
+          </View>
+        )}
+
+        {/* Subsidies Tab */}
+        {activeTab === 'subsidies' && data?.subsidies && (
+          <View style={styles.tabContent}>
+            <Text style={styles.sectionTitle}>💰 Available Energy Subsidies</Text>
+            
+            <View style={styles.subsidyInfoCard}>
+              <Text style={styles.subsidyInfoTitle}>{getRegionFlag(data.region)} {data.region.charAt(0).toUpperCase() + data.region.slice(1)} Subsidies</Text>
+              <Text style={styles.subsidyInfoText}>
+                These subsidies are calculated based on your energy consumption profile and can significantly reduce your investment costs.
+              </Text>
+            </View>
+
+            {data.subsidies.map((subsidy) => (
+              <View key={subsidy.id} style={styles.subsidyCard}>
+                <View style={styles.subsidyHeader}>
+                  <View style={styles.subsidyTitleRow}>
+                    <Text style={styles.subsidyCategoryIcon}>{getCategoryIcon(subsidy.category)}</Text>
+                    <Text style={styles.subsidyTitle}>{subsidy.title}</Text>
+                  </View>
+                  <View style={styles.subsidyAmount}>
+                    <Text style={styles.subsidyAmountText}>{subsidy.amount}</Text>
+                  </View>
+                </View>
+
+                <Text style={styles.subsidyDescription}>{subsidy.description}</Text>
+
+                {/* Personalized Calculations */}
+                {(subsidy.your_savings || subsidy.your_subsidy) && (
+                  <View style={styles.personalizedSection}>
+                    <Text style={styles.personalizedSectionTitle}>📊 Your Personalized Calculation</Text>
+                    {subsidy.your_subsidy && (
+                      <Text style={styles.personalizedValue}>💰 Your subsidy: {subsidy.your_subsidy}</Text>
+                    )}
+                    {subsidy.your_savings && (
+                      <Text style={styles.personalizedValue}>💡 Your savings: {subsidy.your_savings}</Text>
+                    )}
+                    {subsidy.payback_period && (
+                      <Text style={styles.personalizedValue}>📅 Payback period: {subsidy.payback_period}</Text>
+                    )}
+                  </View>
+                )}
+
+                {/* Eligibility */}
+                <View style={styles.eligibilitySection}>
+                  <Text style={styles.eligibilityTitle}>✅ Eligibility Requirements</Text>
+                  {subsidy.eligibility.map((requirement, index) => (
+                    <Text key={index} style={styles.eligibilityItem}>• {requirement}</Text>
+                  ))}
+                </View>
+
+                {/* Application Process */}
+                <View style={styles.applicationSection}>
+                  <Text style={styles.applicationTitle}>📋 How to Apply</Text>
+                  <Text style={styles.applicationText}>{subsidy.application_process}</Text>
+                  {subsidy.deadline && (
+                    <Text style={styles.deadlineText}>⏰ Deadline: {subsidy.deadline}</Text>
                   )}
                 </View>
-              </View>
-              
-              <Text style={styles.insightContent}>{insight.content}</Text>
-              
-              <View style={styles.insightFooter}>
-                <Text style={styles.savingsText}>💰 Potential savings: {insight.potential_savings}</Text>
-                <TouchableOpacity style={styles.actionButton}>
-                  <Text style={styles.actionButtonText}>Learn More</Text>
+
+                <TouchableOpacity style={styles.applyButton}>
+                  <Text style={styles.applyButtonText}>Get Application Details</Text>
                 </TouchableOpacity>
               </View>
-            </View>
-          ))}
-        </View>
+            ))}
 
-        {/* AI Assistant Info */}
-        <View style={styles.infoCard}>
-          <Text style={styles.infoTitle}>How AI Assistant Works</Text>
-          <Text style={styles.infoText}>
-            Our AI analyzes your energy consumption patterns, seasonal variations, and usage habits to provide personalized recommendations. The insights are updated based on your actual consumption data.
-          </Text>
-          
-          <View style={styles.featuresContainer}>
-            <View style={styles.featureItem}>
-              <Text style={styles.featureIcon}>📊</Text>
-              <Text style={styles.featureText}>Pattern Analysis</Text>
-            </View>
-            <View style={styles.featureItem}>
-              <Text style={styles.featureIcon}>🎯</Text>
-              <Text style={styles.featureText}>Personalized Tips</Text>
-            </View>
-            <View style={styles.featureItem}>
-              <Text style={styles.featureIcon}>🔮</Text>
-              <Text style={styles.featureText}>Predictive Insights</Text>
+            {/* Subsidy Tips */}
+            <View style={styles.tipsCard}>
+              <Text style={styles.tipsTitle}>💡 Subsidy Application Tips</Text>
+              <Text style={styles.tipItem}>📋 Always apply BEFORE starting any work</Text>
+              <Text style={styles.tipItem}>📸 Keep all receipts and documentation</Text>
+              <Text style={styles.tipItem}>👷 Use certified installers when required</Text>
+              <Text style={styles.tipItem}>📞 Contact regional authorities for clarification</Text>
+              <Text style={styles.tipItem}>⚡ Combine multiple subsidies when possible</Text>
             </View>
           </View>
-        </View>
+        )}
 
         <View style={{ height: 100 }} />
       </ScrollView>
@@ -294,11 +433,19 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
+    padding: 20,
   },
   loadingText: {
     color: '#fff',
     marginTop: 16,
     fontSize: 16,
+    fontWeight: '600',
+  },
+  loadingSubtext: {
+    color: '#999',
+    marginTop: 8,
+    fontSize: 14,
+    textAlign: 'center',
   },
   errorContainer: {
     flex: 1,
@@ -335,6 +482,31 @@ const styles = StyleSheet.create({
   subtitle: {
     color: '#999',
     fontSize: 16,
+  },
+  tabContainer: {
+    flexDirection: 'row',
+    backgroundColor: '#1a1a1a',
+    borderRadius: 12,
+    padding: 4,
+    marginHorizontal: 20,
+    marginBottom: 20,
+  },
+  tab: {
+    flex: 1,
+    paddingVertical: 12,
+    alignItems: 'center',
+    borderRadius: 8,
+  },
+  activeTab: {
+    backgroundColor: '#4CAF50',
+  },
+  tabText: {
+    color: '#999',
+    fontWeight: '600',
+    fontSize: 14,
+  },
+  activeTabText: {
+    color: '#fff',
   },
   analysisCard: {
     marginHorizontal: 20,
@@ -423,7 +595,7 @@ const styles = StyleSheet.create({
     fontSize: 12,
     marginTop: 4,
   },
-  insightsContainer: {
+  tabContent: {
     paddingHorizontal: 20,
   },
   sectionTitle: {
@@ -431,6 +603,135 @@ const styles = StyleSheet.create({
     fontSize: 20,
     fontWeight: 'bold',
     marginBottom: 16,
+  },
+  subsidyInfoCard: {
+    backgroundColor: '#1B5E20',
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 20,
+    borderWidth: 1,
+    borderColor: '#4CAF50',
+  },
+  subsidyInfoTitle: {
+    color: '#4CAF50',
+    fontSize: 16,
+    fontWeight: 'bold',
+    marginBottom: 8,
+  },
+  subsidyInfoText: {
+    color: '#A5D6A7',
+    fontSize: 14,
+    lineHeight: 20,
+  },
+  subsidyCard: {
+    backgroundColor: '#1a1a1a',
+    borderRadius: 16,
+    padding: 20,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: '#333',
+  },
+  subsidyHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    marginBottom: 12,
+  },
+  subsidyTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+    marginRight: 12,
+  },
+  subsidyCategoryIcon: {
+    fontSize: 20,
+    marginRight: 8,
+  },
+  subsidyTitle: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: 'bold',
+    flex: 1,
+  },
+  subsidyAmount: {
+    backgroundColor: '#4CAF50',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 6,
+  },
+  subsidyAmountText: {
+    color: '#fff',
+    fontSize: 12,
+    fontWeight: 'bold',
+  },
+  subsidyDescription: {
+    color: '#ccc',
+    fontSize: 14,
+    lineHeight: 20,
+    marginBottom: 16,
+  },
+  personalizedSection: {
+    backgroundColor: '#2E7D32',
+    borderRadius: 8,
+    padding: 12,
+    marginBottom: 16,
+  },
+  personalizedSectionTitle: {
+    color: '#4CAF50',
+    fontSize: 14,
+    fontWeight: 'bold',
+    marginBottom: 8,
+  },
+  personalizedValue: {
+    color: '#A5D6A7',
+    fontSize: 13,
+    marginBottom: 4,
+  },
+  eligibilitySection: {
+    marginBottom: 16,
+  },
+  eligibilityTitle: {
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: 'bold',
+    marginBottom: 8,
+  },
+  eligibilityItem: {
+    color: '#ccc',
+    fontSize: 12,
+    marginBottom: 4,
+    lineHeight: 16,
+  },
+  applicationSection: {
+    marginBottom: 16,
+  },
+  applicationTitle: {
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: 'bold',
+    marginBottom: 8,
+  },
+  applicationText: {
+    color: '#ccc',
+    fontSize: 12,
+    lineHeight: 16,
+    marginBottom: 8,
+  },
+  deadlineText: {
+    color: '#FF9800',
+    fontSize: 12,
+    fontWeight: 'bold',
+  },
+  applyButton: {
+    backgroundColor: '#4CAF50',
+    borderRadius: 8,
+    padding: 12,
+    alignItems: 'center',
+  },
+  applyButtonText: {
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: 'bold',
   },
   insightCard: {
     backgroundColor: '#1a1a1a',
@@ -511,42 +812,24 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '600',
   },
-  infoCard: {
+  tipsCard: {
     backgroundColor: '#1a1a1a',
-    marginHorizontal: 20,
-    marginBottom: 20,
-    padding: 20,
     borderRadius: 16,
+    padding: 20,
     borderWidth: 1,
     borderColor: '#333',
+    marginBottom: 20,
   },
-  infoTitle: {
+  tipsTitle: {
     color: '#fff',
     fontSize: 16,
     fontWeight: 'bold',
     marginBottom: 12,
   },
-  infoText: {
+  tipItem: {
     color: '#999',
     fontSize: 14,
     lineHeight: 20,
-    marginBottom: 16,
-  },
-  featuresContainer: {
-    flexDirection: 'row',
-    justifyContent: 'space-around',
-  },
-  featureItem: {
-    alignItems: 'center',
-    flex: 1,
-  },
-  featureIcon: {
-    fontSize: 24,
-    marginBottom: 4,
-  },
-  featureText: {
-    color: '#999',
-    fontSize: 12,
-    textAlign: 'center',
+    marginBottom: 8,
   },
 });
