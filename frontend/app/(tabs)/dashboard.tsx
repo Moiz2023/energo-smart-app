@@ -309,7 +309,7 @@ export default function Dashboard() {
                   <Text style={styles.badgeDate}>
                     {new Date(badge.unlocked_at!).toLocaleDateString()}
                   </Text>
-                  {badge.reward_euros > 0 && (
+                  {badge.reward_euros && badge.reward_euros > 0 && (
                     <Text style={styles.badgeReward}>+€{badge.reward_euros}</Text>
                   )}
                 </LinearGradient>
