@@ -12,6 +12,7 @@ import jwt
 import bcrypt
 import uuid
 import random
+import math
 from pathlib import Path
 
 ROOT_DIR = Path(__file__).parent
@@ -68,6 +69,7 @@ class EnergyReading(BaseModel):
     cost_euros: float
     device_type: str = "general"
     peak_hour: bool = False
+    hourly_breakdown: Optional[List[Dict]] = None
 
 class AIInsight(BaseModel):
     id: str = Field(default_factory=lambda: str(uuid.uuid4()))
@@ -111,6 +113,23 @@ BELGIAN_SUBSIDIES = {
             "category": "insulation"
         },
         {
+            "id": "brussels_solar",
+            "title": "Prime Photovoltaïque (Solar Panel Subsidy)",
+            "description": "Financial incentive for solar panel installation",
+            "region": "brussels",
+            "amount": "€350/kWc installed (max 3kWc) = €1,050 total",
+            "eligibility": [
+                "First-time solar installation",
+                "Property in Brussels",
+                "Certified installer required",
+                "Technical pre-approval needed"
+            ],
+            "application_process": "Apply at homegrade.brussels with installer quote",
+            "deadline": "Subject to annual budget allocation",
+            "potential_savings": "€200-500/year in reduced electricity bills",
+            "category": "solar"
+        },
+        {
             "id": "brussels_heating",
             "title": "Prime Chauffage (Heating System Subsidy)",
             "description": "Support for efficient heating system replacement",
@@ -126,23 +145,6 @@ BELGIAN_SUBSIDIES = {
             "deadline": "Apply before installation",
             "potential_savings": "€400-800/year on energy bills",
             "category": "heating"
-        },
-        {
-            "id": "brussels_solar",
-            "title": "Prime Photovoltaïque (Solar Panel Subsidy)",
-            "description": "Financial incentive for solar panel installation",
-            "region": "brussels",
-            "amount": "€350/kWc installed (max 3kWc)",
-            "eligibility": [
-                "First-time solar installation",
-                "Property in Brussels",
-                "Certified installer required",
-                "Technical pre-approval needed"
-            ],
-            "application_process": "Apply at homegrade.brussels with installer quote",
-            "deadline": "Subject to annual budget allocation",
-            "potential_savings": "€200-500/year in reduced electricity bills",
-            "category": "solar"
         }
     ],
     "wallonia": [
@@ -179,23 +181,6 @@ BELGIAN_SUBSIDIES = {
             "deadline": "Ongoing, subject to budget",
             "potential_savings": "€600-1200/year on heating costs",
             "category": "heating"
-        },
-        {
-            "id": "wallonia_renovation",
-            "title": "Prime Rénovation Globale (Global Renovation)",
-            "description": "Comprehensive renovation package with multiple measures",
-            "region": "wallonia",
-            "amount": "Up to €10,000 for comprehensive renovation",
-            "eligibility": [
-                "Combination of insulation, heating, ventilation",
-                "Significant energy performance improvement",
-                "Professional energy audit required",
-                "Income-based additional bonuses"
-            ],
-            "application_process": "Energy audit first, then application with renovation plan",
-            "deadline": "Limited budget per year",
-            "potential_savings": "€800-2000/year on energy bills",
-            "category": "renovation"
         }
     ],
     "flanders": [
@@ -215,23 +200,6 @@ BELGIAN_SUBSIDIES = {
             "deadline": "Applications must be submitted before works begin",
             "potential_savings": "€400-1000/year on energy costs",
             "category": "renovation"
-        },
-        {
-            "id": "flanders_insulation",
-            "title": "Isolatiepremie (Insulation Premium)",
-            "description": "Specific support for thermal insulation improvements",
-            "region": "flanders",
-            "amount": "€6/m² for roof, €8/m² for walls (income-dependent)",
-            "eligibility": [
-                "Property in Flemish region",
-                "Minimum insulation performance requirements",
-                "Professional installation required",
-                "Building older than 5 years"
-            ],
-            "application_process": "Online application with technical documentation",
-            "deadline": "Ongoing program with annual budget limits",
-            "potential_savings": "€300-900/year on heating bills",
-            "category": "insulation"
         },
         {
             "id": "flanders_solar",
@@ -279,95 +247,136 @@ async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(s
     except jwt.InvalidTokenError:
         raise HTTPException(status_code=401, detail="Invalid token")
 
-def generate_realistic_energy_data(user_id: str, days: int = 30):
-    """Generate highly realistic simulated energy consumption data"""
-    import random
-    from datetime import datetime, timedelta
+def generate_realistic_hourly_pattern(base_consumption: float, is_weekend: bool = False, season_factor: float = 1.0) -> List[Dict]:
+    """Generate realistic hourly consumption pattern for a single day"""
+    hourly_data = []
     
+    # Define realistic usage patterns based on typical household behavior
+    # Values represent relative consumption multipliers for each hour
+    if is_weekend:
+        # Weekend pattern - higher morning usage, more distributed throughout day
+        hourly_pattern = [
+            0.4, 0.3, 0.3, 0.3, 0.4, 0.6,  # 00-05: Night/early morning
+            0.8, 1.2, 1.4, 1.6, 1.5, 1.3,  # 06-11: Wake up later, gradual increase
+            1.2, 1.0, 1.1, 1.3, 1.4, 1.8,  # 12-17: Home activities, cooking
+            2.2, 2.4, 2.0, 1.6, 1.2, 0.8   # 18-23: Evening peak, gradual decrease
+        ]
+    else:
+        # Weekday pattern - clear morning and evening peaks
+        hourly_pattern = [
+            0.3, 0.2, 0.2, 0.2, 0.3, 0.5,  # 00-05: Night, very low usage
+            1.2, 2.0, 2.2, 1.8, 0.8, 0.6,  # 06-11: Morning rush, then away at work
+            0.5, 0.4, 0.4, 0.5, 0.6, 1.0,  # 12-17: Low daytime, gradual return
+            2.8, 3.2, 2.8, 2.2, 1.4, 0.9   # 18-23: Strong evening peak
+        ]
+    
+    # Apply seasonal adjustments
+    if season_factor > 1.1:  # Summer - AC usage during hot hours
+        for i in range(12, 20):  # 12 PM - 8 PM
+            hourly_pattern[i] *= 1.3
+    elif season_factor > 1.05:  # Winter - heating in morning and evening
+        for i in range(6, 10):   # Morning heating
+            hourly_pattern[i] *= 1.2
+        for i in range(17, 23):  # Evening heating
+            hourly_pattern[i] *= 1.4
+    
+    # Generate hourly data
+    total_pattern_sum = sum(hourly_pattern)
+    
+    for hour in range(24):
+        # Normalize pattern to match daily total
+        hour_consumption = (base_consumption * hourly_pattern[hour] / total_pattern_sum) * 24
+        
+        # Add some random variation (±15%)
+        hour_consumption *= random.uniform(0.85, 1.15)
+        
+        # Determine if it's a peak hour (top 30% of usage)
+        is_peak = hourly_pattern[hour] > 1.5
+        
+        # Calculate cost (peak vs off-peak rates)
+        rate = 0.28 if is_peak else 0.22  # €0.28 peak, €0.22 off-peak
+        hour_cost = hour_consumption * rate
+        
+        hourly_data.append({
+            "hour": hour,
+            "consumption": round(hour_consumption, 3),
+            "cost": round(hour_cost, 3),
+            "is_peak": is_peak,
+            "rate": rate
+        })
+    
+    return hourly_data
+
+def generate_realistic_energy_data(user_id: str, days: int = 30):
+    """Generate highly realistic energy consumption data with proper patterns"""
     data = []
-    base_consumption = random.uniform(10, 18)  # Base daily kWh for household
+    
+    # Base consumption varies by household (10-18 kWh/day typical for Belgian household)
+    base_daily_consumption = random.uniform(11, 16)
     
     for i in range(days):
         date = datetime.utcnow() - timedelta(days=i)
+        is_weekend = date.weekday() >= 5
         
-        # Daily pattern variations
-        daily_multiplier = 1.0
-        
-        # Weekend usage (typically higher)
-        if date.weekday() >= 5:
-            daily_multiplier *= 1.15
-        
-        # Seasonal variations
+        # Seasonal factor
         month = date.month
         if month in [6, 7, 8]:  # Summer - AC usage
-            daily_multiplier *= 1.35
+            season_factor = 1.25
+            daily_multiplier = random.uniform(1.1, 1.4)  # Higher variation in summer
         elif month in [12, 1, 2]:  # Winter - heating
-            daily_multiplier *= 1.25
-        elif month in [3, 4, 5, 9, 10, 11]:  # Spring/Fall
-            daily_multiplier *= 0.9
+            season_factor = 1.35
+            daily_multiplier = random.uniform(1.2, 1.5)  # Highest consumption
+        else:  # Spring/Fall
+            season_factor = 0.95
+            daily_multiplier = random.uniform(0.8, 1.1)  # Lower consumption
         
-        # Weather-like randomness (some days higher/lower)
-        weather_factor = random.uniform(0.85, 1.20)
+        # Weekend adjustment
+        if is_weekend:
+            daily_multiplier *= 1.15  # 15% higher on weekends
+        
+        # Daily weather variation
+        weather_factor = random.uniform(0.9, 1.2)
         daily_multiplier *= weather_factor
         
-        # Calculate hourly consumption for the day
-        daily_total = base_consumption * daily_multiplier
+        # Calculate actual daily consumption
+        daily_consumption = base_daily_consumption * daily_multiplier * season_factor
         
-        # Distribute across peak and off-peak hours
-        peak_hours = [7, 8, 9, 17, 18, 19, 20, 21]  # Morning and evening peaks
-        peak_consumption = daily_total * 0.6  # 60% during peak hours
-        off_peak_consumption = daily_total * 0.4  # 40% during off-peak
+        # Generate realistic hourly breakdown
+        hourly_breakdown = generate_realistic_hourly_pattern(
+            daily_consumption, is_weekend, season_factor
+        )
         
-        # Add some hourly variation throughout the day
-        hourly_variations = []
-        for hour in range(24):
-            if hour in peak_hours:
-                hour_consumption = (peak_consumption / len(peak_hours)) * random.uniform(0.8, 1.4)
-                is_peak = True
-            else:
-                hour_consumption = (off_peak_consumption / (24 - len(peak_hours))) * random.uniform(0.6, 1.2)
-                is_peak = False
-            
-            hourly_variations.append({
-                "hour": hour,
-                "consumption": hour_consumption,
-                "is_peak": is_peak
-            })
+        # Calculate totals from hourly data
+        total_consumption = sum(h["consumption"] for h in hourly_breakdown)
+        total_cost = sum(h["cost"] for h in hourly_breakdown)
         
-        # Cost calculation (peak vs off-peak rates)
-        peak_rate = 0.28  # €0.28 per kWh during peak
-        off_peak_rate = 0.22  # €0.22 per kWh during off-peak
-        
-        total_cost = 0
-        for hour_data in hourly_variations:
-            rate = peak_rate if hour_data["is_peak"] else off_peak_rate
-            total_cost += hour_data["consumption"] * rate
+        # Find peak hour
+        peak_hour_data = max(hourly_breakdown, key=lambda x: x["consumption"])
         
         reading = {
             "id": str(uuid.uuid4()),
             "user_id": user_id,
             "timestamp": date,
-            "consumption_kwh": round(daily_total, 2),
+            "consumption_kwh": round(total_consumption, 2),
             "cost_euros": round(total_cost, 2),
             "device_type": "general",
-            "peak_hour": max(hourly_variations, key=lambda x: x["consumption"])["is_peak"],
-            "hourly_breakdown": hourly_variations
+            "peak_hour": peak_hour_data["is_peak"],
+            "hourly_breakdown": hourly_breakdown,
+            "is_weekend": is_weekend,
+            "season_factor": season_factor
         }
         data.append(reading)
     
     return data
 
 def analyze_consumption_patterns(readings: List[Dict]) -> Dict:
-    """Analyze user's consumption patterns for personalized insights"""
+    """Advanced analysis of user's consumption patterns"""
     if not readings:
         return {}
     
-    # Calculate averages
+    # Basic statistics
     avg_daily = sum(r["consumption_kwh"] for r in readings) / len(readings)
     avg_cost = sum(r["cost_euros"] for r in readings) / len(readings)
-    
-    # Find peak usage days
-    peak_days = sorted(readings, key=lambda x: x["consumption_kwh"], reverse=True)[:3]
     
     # Weekend vs weekday analysis
     weekend_readings = [r for r in readings if r["timestamp"].weekday() >= 5]
@@ -376,7 +385,39 @@ def analyze_consumption_patterns(readings: List[Dict]) -> Dict:
     weekend_avg = sum(r["consumption_kwh"] for r in weekend_readings) / len(weekend_readings) if weekend_readings else 0
     weekday_avg = sum(r["consumption_kwh"] for r in weekday_readings) / len(weekday_readings) if weekday_readings else 0
     
-    # Recent trend (last 7 days vs previous 7 days)
+    # Peak hour analysis
+    peak_hours_consumption = 0
+    off_peak_consumption = 0
+    total_hours = 0
+    
+    morning_peak = 0  # 6-10 AM
+    evening_peak = 0  # 6-10 PM
+    daytime_low = 0   # 10 AM - 6 PM
+    night_low = 0     # 10 PM - 6 AM
+    
+    for reading in readings:
+        if "hourly_breakdown" in reading and reading["hourly_breakdown"]:
+            for hour_data in reading["hourly_breakdown"]:
+                hour = hour_data["hour"]
+                consumption = hour_data["consumption"]
+                total_hours += 1
+                
+                if hour_data["is_peak"]:
+                    peak_hours_consumption += consumption
+                else:
+                    off_peak_consumption += consumption
+                
+                # Time period analysis
+                if 6 <= hour < 10:
+                    morning_peak += consumption
+                elif 18 <= hour < 22:
+                    evening_peak += consumption
+                elif 10 <= hour < 18:
+                    daytime_low += consumption
+                else:
+                    night_low += consumption
+    
+    # Recent trend analysis
     recent_7 = readings[:7]
     previous_7 = readings[7:14] if len(readings) >= 14 else readings[7:]
     
@@ -385,14 +426,31 @@ def analyze_consumption_patterns(readings: List[Dict]) -> Dict:
     
     trend_change = ((recent_avg - previous_avg) / previous_avg * 100) if previous_avg > 0 else 0
     
+    # Cost analysis
+    recent_cost_avg = sum(r["cost_euros"] for r in recent_7) / len(recent_7)
+    previous_cost_avg = sum(r["cost_euros"] for r in previous_7) / len(previous_7) if previous_7 else recent_cost_avg
+    cost_trend = ((recent_cost_avg - previous_cost_avg) / previous_cost_avg * 100) if previous_cost_avg > 0 else 0
+    
+    # Efficiency metrics
+    high_consumption_days = len([r for r in readings if r["consumption_kwh"] > avg_daily * 1.2])
+    efficient_days = len([r for r in readings if r["consumption_kwh"] < avg_daily * 0.8])
+    
     return {
         "avg_daily_kwh": round(avg_daily, 2),
         "avg_daily_cost": round(avg_cost, 2),
-        "peak_usage_day": peak_days[0] if peak_days else None,
         "weekend_vs_weekday_ratio": round(weekend_avg / weekday_avg, 2) if weekday_avg > 0 else 1,
         "recent_trend_percent": round(trend_change, 1),
-        "high_consumption_days": len([r for r in readings if r["consumption_kwh"] > avg_daily * 1.2]),
-        "efficient_days": len([r for r in readings if r["consumption_kwh"] < avg_daily * 0.8])
+        "cost_trend_percent": round(cost_trend, 1),
+        "high_consumption_days": high_consumption_days,
+        "efficient_days": efficient_days,
+        "peak_vs_offpeak_ratio": round(peak_hours_consumption / off_peak_consumption, 2) if off_peak_consumption > 0 else 1,
+        "morning_peak_avg": round(morning_peak / len(readings) / 4, 2),  # Avg per hour in morning peak
+        "evening_peak_avg": round(evening_peak / len(readings) / 4, 2),  # Avg per hour in evening peak
+        "daytime_avg": round(daytime_low / len(readings) / 8, 2),        # Avg per hour during day
+        "night_avg": round(night_low / len(readings) / 8, 2),            # Avg per hour at night
+        "weekend_avg_kwh": round(weekend_avg, 2),
+        "weekday_avg_kwh": round(weekday_avg, 2),
+        "total_days_analyzed": len(readings)
     }
 
 def calculate_subsidy_savings(user_patterns: Dict, user_region: str, house_size: float) -> List[Dict]:
@@ -401,121 +459,188 @@ def calculate_subsidy_savings(user_patterns: Dict, user_region: str, house_size:
     personalized_subsidies = []
     
     avg_annual_cost = user_patterns.get("avg_daily_cost", 3.5) * 365
+    avg_daily_kwh = user_patterns.get("avg_daily_kwh", 12)
     
     for subsidy in subsidies:
         personalized_subsidy = subsidy.copy()
         
-        # Calculate personalized savings based on category
+        # Calculate personalized savings based on category and user data
         if subsidy["category"] == "insulation":
             # Insulation savings: 20-30% of heating costs (assume 60% of total is heating)
             heating_cost = avg_annual_cost * 0.6
             estimated_savings = heating_cost * 0.25  # 25% average savings
-            personalized_subsidy["your_savings"] = f"€{int(estimated_savings)}/year"
+            personalized_subsidy["your_annual_savings"] = f"€{int(estimated_savings)}"
             personalized_subsidy["payback_period"] = "3-5 years"
             
             # Calculate subsidy amount based on house size
-            if "€" in subsidy["amount"] and "/m²" in subsidy["amount"]:
-                rate = float(subsidy["amount"].split("€")[1].split("/m²")[0])
-                total_subsidy = int(rate * house_size)
-                personalized_subsidy["your_subsidy"] = f"€{total_subsidy} (for {house_size}m²)"
-            
-        elif subsidy["category"] == "heating":
-            # Heat pump/heating savings: 30-50% of heating costs
-            heating_cost = avg_annual_cost * 0.6
-            estimated_savings = heating_cost * 0.4  # 40% average savings
-            personalized_subsidy["your_savings"] = f"€{int(estimated_savings)}/year"
-            personalized_subsidy["payback_period"] = "4-6 years"
+            if user_region == "wallonia":
+                total_subsidy = int(20 * house_size)  # €20/m²
+                personalized_subsidy["your_subsidy_amount"] = f"€{total_subsidy}"
+            elif user_region == "brussels":
+                total_subsidy = int(15 * house_size)  # €15/m² average
+                personalized_subsidy["your_subsidy_amount"] = f"€{total_subsidy}"
+            elif user_region == "flanders":
+                total_subsidy = int(6 * house_size)   # €6/m²
+                personalized_subsidy["your_subsidy_amount"] = f"€{total_subsidy}"
             
         elif subsidy["category"] == "solar":
-            # Solar savings: based on roof capacity (assume 3kWp average)
-            annual_production = 3000  # kWh for 3kWp system in Belgium
+            # Solar savings based on system size and current usage
+            annual_kwh = avg_daily_kwh * 365
+            system_size_kwp = min(3, annual_kwh / 1000)  # Max 3kWp, or enough to cover usage
+            annual_production = system_size_kwp * 1000   # kWh per year in Belgium
             electricity_rate = 0.25
-            estimated_savings = annual_production * electricity_rate
-            personalized_subsidy["your_savings"] = f"€{int(estimated_savings)}/year"
+            estimated_savings = min(annual_production * electricity_rate, avg_annual_cost * 0.8)  # Max 80% of bill
+            
+            personalized_subsidy["your_annual_savings"] = f"€{int(estimated_savings)}"
             personalized_subsidy["payback_period"] = "6-8 years"
+            
+            if user_region == "brussels":
+                subsidy_amount = int(350 * system_size_kwp)  # €350/kWc
+                personalized_subsidy["your_subsidy_amount"] = f"€{subsidy_amount}"
+            elif user_region == "flanders":
+                personalized_subsidy["your_subsidy_amount"] = "€1,500"
+            else:  # wallonia
+                personalized_subsidy["your_subsidy_amount"] = "€1,200"
+            
+        elif subsidy["category"] == "heating":
+            # Heat pump savings: 30-50% of heating costs
+            heating_cost = avg_annual_cost * 0.6
+            estimated_savings = heating_cost * 0.4  # 40% average savings
+            personalized_subsidy["your_annual_savings"] = f"€{int(estimated_savings)}"
+            personalized_subsidy["payback_period"] = "4-6 years"
+            personalized_subsidy["your_subsidy_amount"] = "€2,500"
             
         elif subsidy["category"] == "renovation":
             # Comprehensive renovation: 40-60% total energy savings
             estimated_savings = avg_annual_cost * 0.5  # 50% average savings
-            personalized_subsidy["your_savings"] = f"€{int(estimated_savings)}/year"
+            personalized_subsidy["your_annual_savings"] = f"€{int(estimated_savings)}"
             personalized_subsidy["payback_period"] = "5-8 years"
+            personalized_subsidy["your_subsidy_amount"] = "€5,000"
+        
+        # Add context-aware recommendations
+        personalized_subsidy["personalized_tip"] = generate_subsidy_tip(subsidy, user_patterns)
         
         personalized_subsidies.append(personalized_subsidy)
     
     return personalized_subsidies
 
+def generate_subsidy_tip(subsidy: Dict, patterns: Dict) -> str:
+    """Generate personalized tip based on subsidy type and user patterns"""
+    category = subsidy["category"]
+    evening_high = patterns.get("evening_peak_avg", 0) > patterns.get("daytime_avg", 0) * 1.5
+    weekend_high = patterns.get("weekend_vs_weekday_ratio", 1) > 1.2
+    
+    if category == "insulation":
+        if weekend_high:
+            return "Your weekend usage is high, suggesting you're home more. Insulation will provide constant comfort and savings."
+        return "With your heating patterns, insulation could significantly reduce your energy bills."
+    
+    elif category == "solar":
+        avg_daily = patterns.get("avg_daily_kwh", 12)
+        if avg_daily > 15:
+            return f"Your high daily usage ({avg_daily:.1f} kWh) makes solar panels an excellent investment."
+        return "Solar panels can cover a significant portion of your electricity needs and reduce your bills."
+    
+    elif category == "heating":
+        if evening_high:
+            return "Your evening consumption peaks suggest heating usage. A heat pump could provide the same comfort for less."
+        return "Modern heating systems can maintain comfort while using 60% less energy."
+    
+    return "This subsidy aligns well with your energy usage patterns."
+
 def generate_personalized_insights(user_patterns: Dict, user_id: str) -> List[Dict]:
-    """Generate personalized AI insights based on user's consumption patterns"""
+    """Generate highly personalized AI insights based on detailed consumption patterns"""
     insights = []
     
     if not user_patterns:
-        # Default insights for new users
-        return [
-            {
-                "id": str(uuid.uuid4()),
-                "title": "Welcome to Smart Energy Management",
-                "content": "Start tracking your energy usage to get personalized insights and savings recommendations.",
-                "category": "welcome",
-                "potential_savings": "Up to €20/month",
-                "priority": "high",
-                "personalized": False
-            }
-        ]
+        return [{
+            "id": str(uuid.uuid4()),
+            "title": "Welcome to Smart Energy Management",
+            "content": "Start tracking your energy usage to get personalized insights and savings recommendations.",
+            "category": "welcome",
+            "potential_savings": "Up to €20/month",
+            "priority": "high",
+            "personalized": False
+        }]
     
-    # Trend-based insights
-    if user_patterns.get("recent_trend_percent", 0) > 10:
+    # Evening peak analysis
+    evening_peak = user_patterns.get("evening_peak_avg", 0)
+    daytime_avg = user_patterns.get("daytime_avg", 0)
+    if evening_peak > daytime_avg * 1.3:  # Evening is 30% higher than daytime
+        peak_percentage = int(((evening_peak - daytime_avg) / daytime_avg) * 100)
         insights.append({
             "id": str(uuid.uuid4()),
-            "title": "Rising Energy Usage Alert",
-            "content": f"Your energy usage increased by {user_patterns['recent_trend_percent']}% this week. Check if any new appliances are running or heating/cooling settings changed.",
-            "category": "alert",
+            "title": "Evening Energy Peak Detected",
+            "content": f"Your evening consumption (7-10 PM) is {peak_percentage}% higher than your daily average. Consider lowering lighting usage, using LED bulbs, or shifting some activities to off-peak hours.",
+            "category": "timing",
             "potential_savings": f"€{round(user_patterns['avg_daily_cost'] * 0.15, 1)}/day",
             "priority": "high",
             "personalized": True
         })
-    elif user_patterns.get("recent_trend_percent", 0) < -5:
-        insights.append({
-            "id": str(uuid.uuid4()),
-            "title": "Great Energy Savings!",
-            "content": f"Excellent! You reduced your energy usage by {abs(user_patterns['recent_trend_percent'])}% this week. Keep up the great work!",
-            "category": "achievement",
-            "potential_savings": f"€{round(user_patterns['avg_daily_cost'] * 0.05, 1)}/day saved",
-            "priority": "medium",
-            "personalized": True
-        })
     
-    # Weekend usage insights
-    if user_patterns.get("weekend_vs_weekday_ratio", 1) > 1.2:
+    # Weekend usage patterns
+    weekend_ratio = user_patterns.get("weekend_vs_weekday_ratio", 1)
+    if weekend_ratio > 1.2:
+        weekend_increase = int((weekend_ratio - 1) * 100)
         insights.append({
             "id": str(uuid.uuid4()),
             "title": "Weekend Energy Spike",
-            "content": f"You use {round((user_patterns['weekend_vs_weekday_ratio'] - 1) * 100)}% more energy on weekends. Try unplugging standby devices and optimizing heating/cooling schedules.",
-            "category": "optimization",
-            "potential_savings": f"€{round(user_patterns['avg_daily_cost'] * 0.1, 1)}/weekend",
+            "content": f"You use {weekend_increase}% more energy on weekends. This is normal for home activities, but you can save by unplugging devices on standby and optimizing heating/cooling schedules.",
+            "category": "weekend",
+            "potential_savings": f"€{round(user_patterns['avg_daily_cost'] * 0.12, 1)}/weekend",
             "priority": "medium",
             "personalized": True
         })
     
-    # Peak usage insights
-    if user_patterns.get("high_consumption_days", 0) > 5:
+    # Recent trend analysis
+    trend = user_patterns.get("recent_trend_percent", 0)
+    cost_trend = user_patterns.get("cost_trend_percent", 0)
+    if trend < -5:  # Significant improvement
+        saved_amount = abs(cost_trend * user_patterns['avg_daily_cost'] / 100) * 7  # Weekly savings
         insights.append({
             "id": str(uuid.uuid4()),
-            "title": "Optimize Peak Usage",
-            "content": f"You had {user_patterns['high_consumption_days']} high-usage days this month. Peak usage often occurs at 7-9 AM and 6-9 PM. Shift some activities to off-peak hours.",
-            "category": "timing",
-            "potential_savings": f"€{round(user_patterns['avg_daily_cost'] * 0.12, 1)}/day",
+            "title": "Great Energy Savings!",
+            "content": f"Excellent! You reduced your energy usage by {abs(trend):.1f}% this week. You saved approximately €{saved_amount:.1f} compared to last week. Keep up the great work!",
+            "category": "achievement",
+            "potential_savings": f"€{saved_amount:.1f}/week saved",
+            "priority": "low",
+            "personalized": True
+        })
+    elif trend > 10:  # Concerning increase
+        extra_cost = (trend * user_patterns['avg_daily_cost'] / 100) * 7  # Weekly extra cost
+        insights.append({
+            "id": str(uuid.uuid4()),
+            "title": "Rising Energy Usage Alert",
+            "content": f"Your energy usage increased by {trend:.1f}% this week, costing an extra €{extra_cost:.1f}. Check if any new appliances are running or if heating/cooling settings changed.",
+            "category": "alert",
+            "potential_savings": f"€{extra_cost:.1f}/week potential savings",
+            "priority": "high",
+            "personalized": True
+        })
+    
+    # Peak vs off-peak optimization
+    peak_ratio = user_patterns.get("peak_vs_offpeak_ratio", 1)
+    if peak_ratio > 1.5:
+        insights.append({
+            "id": str(uuid.uuid4()),
+            "title": "Peak Hour Optimization Opportunity",
+            "content": f"You use significantly more energy during expensive peak hours. Try shifting dishwasher, washing machine, and charging activities to off-peak times (10 PM - 6 AM) for lower rates.",
+            "category": "optimization",
+            "potential_savings": f"€{round(user_patterns['avg_daily_cost'] * 0.18, 1)}/day",
             "priority": "medium",
             "personalized": True
         })
     
-    # Efficiency praise
-    if user_patterns.get("efficient_days", 0) > 10:
+    # Efficiency recognition
+    efficient_days = user_patterns.get("efficient_days", 0)
+    total_days = user_patterns.get("total_days_analyzed", 30)
+    if efficient_days > total_days * 0.4:  # More than 40% efficient days
         insights.append({
             "id": str(uuid.uuid4()),
             "title": "Energy Efficiency Champion",
-            "content": f"Amazing! You had {user_patterns['efficient_days']} energy-efficient days this month. You're on track to earn the 'Green Champion' badge!",
+            "content": f"Outstanding! You had {efficient_days} energy-efficient days out of {total_days}. You're well on your way to earning advanced efficiency badges and maximizing your savings.",
             "category": "gamification",
-            "potential_savings": f"€{round(user_patterns['avg_daily_cost'] * 0.2, 1)}/month in savings",
+            "potential_savings": f"€{round(user_patterns['avg_daily_cost'] * 0.25, 1)}/month in potential savings",
             "priority": "low",
             "personalized": True
         })
@@ -589,7 +714,7 @@ async def logout(user_id: str = Depends(get_current_user)):
     """Logout endpoint - client should remove token locally"""
     return {"message": "Logged out successfully"}
 
-# Enhanced Dashboard endpoint
+# Enhanced Dashboard endpoint with realistic data
 @api_router.get("/dashboard")
 async def get_dashboard(period: str = "week", user_id: str = Depends(get_current_user)):
     # Determine date range based on period
@@ -635,36 +760,29 @@ async def get_dashboard(period: str = "week", user_id: str = Depends(get_current
     consumption_change = ((current_consumption - comparison_consumption) / comparison_consumption * 100) if comparison_consumption > 0 else 0
     cost_change = ((current_cost - comparison_cost) / comparison_cost * 100) if comparison_cost > 0 else 0
     
-    # Generate chart data
+    # Generate enhanced chart data with realistic patterns
     if period == "day":
-        # Hourly data for day view
-        hourly_data = {}
-        for reading in current_readings:
-            if "hourly_breakdown" in reading:
-                for hour_data in reading["hourly_breakdown"]:
-                    hour = hour_data["hour"]
-                    if hour not in hourly_data:
-                        hourly_data[hour] = {"consumption": 0, "cost": 0}
-                    rate = 0.28 if hour_data["is_peak"] else 0.22
-                    hourly_data[hour]["consumption"] += hour_data["consumption"]
-                    hourly_data[hour]["cost"] += hour_data["consumption"] * rate
-        
-        chart_data = [
-            {
-                "label": f"{hour:02d}:00",
-                "value": round(data["consumption"], 2),
-                "cost": round(data["cost"], 2),
-                "color": "#4CAF50" if data["consumption"] < current_consumption / 24 else "#FF5722"
-            }
-            for hour, data in sorted(hourly_data.items())
-        ]
+        # Hourly data for day view - show realistic daily pattern
+        if current_readings and "hourly_breakdown" in current_readings[0]:
+            hourly_breakdown = current_readings[0]["hourly_breakdown"]
+            chart_data = [
+                {
+                    "label": f"{hour_data['hour']:02d}:00",
+                    "value": round(hour_data["consumption"], 2),
+                    "cost": round(hour_data["cost"], 2),
+                    "color": "#FF5722" if hour_data["is_peak"] else "#4CAF50"
+                }
+                for hour_data in hourly_breakdown
+            ]
+        else:
+            chart_data = []
     else:
         # Daily data for week/month view
         daily_data = {}
         for reading in current_readings:
             date_str = reading["timestamp"].strftime("%Y-%m-%d")
             if date_str not in daily_data:
-                daily_data[date_str] = {"consumption": 0, "cost": 0}
+                daily_data[date_str] = {"consumption": 0, "cost": 0, "is_weekend": reading["timestamp"].weekday() >= 5}
             daily_data[date_str]["consumption"] += reading["consumption_kwh"]
             daily_data[date_str]["cost"] += reading["cost_euros"]
         
@@ -675,31 +793,35 @@ async def get_dashboard(period: str = "week", user_id: str = Depends(get_current
                 "label": datetime.strptime(date, "%Y-%m-%d").strftime("%m/%d"),
                 "value": round(data["consumption"], 2),
                 "cost": round(data["cost"], 2),
-                "color": "#4CAF50" if data["consumption"] < avg_consumption else "#FF5722"
+                "color": "#FF9800" if data["is_weekend"] else ("#FF5722" if data["consumption"] > avg_consumption else "#4CAF50")
             }
             for date, data in sorted(daily_data.items())
         ]
     
-    # Generate insights
+    # Generate insights with realistic data
     patterns = analyze_consumption_patterns(current_readings)
     
-    # Create insight card message
+    # Create personalized insight card message
     if consumption_change > 10:
-        insight_message = f"Today you used {consumption_change:.0f}% more energy than yesterday."
+        insight_message = f"Your energy usage increased by {consumption_change:.0f}% compared to last {period}. Check your heating/cooling settings."
         insight_type = "warning"
     elif consumption_change < -5:
         saved_amount = abs(cost_change * current_cost / 100)
-        insight_message = f"Great job! You saved €{saved_amount:.1f} compared to last {period}."
+        insight_message = f"Great job! You saved €{saved_amount:.1f} compared to last {period}. Keep up the excellent work!"
         insight_type = "success"
     else:
-        insight_message = f"Your energy usage is stable compared to last {period}."
+        insight_message = f"Your energy usage is stable compared to last {period}. Consider optimization opportunities."
         insight_type = "info"
     
-    # Weekly goal progress (simulated)
-    weekly_goal_kwh = patterns.get("avg_daily_kwh", 15) * 7 * 0.9  # 10% reduction goal
-    current_week_consumption = current_consumption if period == "week" else current_consumption * 7
-    goal_progress = min((weekly_goal_kwh - current_week_consumption) / weekly_goal_kwh * 100, 100)
-    goal_progress = max(goal_progress, 0)
+    # Weekly goal progress (realistic based on patterns)
+    target_reduction = 0.1  # 10% reduction goal
+    weekly_goal_kwh = patterns.get("avg_daily_kwh", 15) * 7 * (1 - target_reduction)
+    current_week_consumption = current_consumption if period == "week" else current_consumption * 7 / max(len(set(r["timestamp"].date() for r in current_readings)), 1)
+    
+    if weekly_goal_kwh > 0:
+        goal_progress = max(0, min(100, ((weekly_goal_kwh - current_week_consumption + weekly_goal_kwh * target_reduction) / (weekly_goal_kwh * target_reduction)) * 100))
+    else:
+        goal_progress = 50
     
     return {
         "summary": {
@@ -718,13 +840,14 @@ async def get_dashboard(period: str = "week", user_id: str = Depends(get_current
         },
         "progress": {
             "weekly_goal_percent": round(goal_progress, 1),
-            "goal_description": f"This week's energy goal: {goal_progress:.0f}% achieved"
+            "goal_description": f"Weekly energy reduction goal: {goal_progress:.0f}% achieved",
+            "estimated_savings": f"€{round(patterns.get('avg_daily_cost', 3) * 7 * target_reduction, 1)}/week potential"
         },
         "chart_data": chart_data,
         "patterns": patterns
     }
 
-# Enhanced AI Assistant endpoint with subsidies
+# Enhanced AI Assistant endpoint with realistic insights
 @api_router.get("/ai-insights")
 async def get_ai_insights(user_id: str = Depends(get_current_user)):
     # Get user data including settings
@@ -742,7 +865,7 @@ async def get_ai_insights(user_id: str = Depends(get_current_user)):
         "timestamp": {"$gte": thirty_days_ago}
     }, {"_id": 0}).sort("timestamp", -1).to_list(100)
     
-    # Analyze patterns
+    # Analyze patterns with enhanced analysis
     patterns = analyze_consumption_patterns(readings)
     
     # Generate personalized insights
@@ -758,21 +881,10 @@ async def get_ai_insights(user_id: str = Depends(get_current_user)):
         "region": user_region
     }
 
-# Subsidies endpoint
-@api_router.get("/subsidies")
-async def get_subsidies(region: str = None, user_id: str = Depends(get_current_user)):
-    # Get user data if region not specified
-    if not region:
-        user = await db.users.find_one({"id": user_id})
-        if user:
-            region = user.get("settings", {}).get("region", "brussels")
-        else:
-            region = "brussels"
-    
-    # Get subsidies for the specified region
-    subsidies = BELGIAN_SUBSIDIES.get(region, [])
-    
-    # Get user patterns for personalized calculations
+# Gamification - Enhanced badges with progress tracking
+@api_router.get("/badges")
+async def get_badges(user_id: str = Depends(get_current_user)):
+    # Get user's energy data for badge calculations
     thirty_days_ago = datetime.utcnow() - timedelta(days=30)
     readings = await db.energy_readings.find({
         "user_id": user_id,
@@ -781,93 +893,47 @@ async def get_subsidies(region: str = None, user_id: str = Depends(get_current_u
     
     patterns = analyze_consumption_patterns(readings)
     
-    # Get user house size
-    user = await db.users.find_one({"id": user_id})
-    house_size = user.get("house_size_m2", 150.0) if user else 150.0
-    
-    # Calculate personalized savings
-    personalized_subsidies = calculate_subsidy_savings(patterns, region, house_size)
-    
-    return {
-        "subsidies": personalized_subsidies,
-        "region": region,
-        "available_regions": list(BELGIAN_SUBSIDIES.keys())
-    }
-
-# Challenges endpoint
-@api_router.get("/challenges")
-async def get_challenges(user_id: str = Depends(get_current_user)):
-    # Get current consumption for progress calculation
-    week_start = datetime.utcnow() - timedelta(days=7)
-    recent_readings = await db.energy_readings.find({
-        "user_id": user_id,
-        "timestamp": {"$gte": week_start}
-    }, {"_id": 0}).to_list(100)
-    
-    current_week_consumption = sum(r["consumption_kwh"] for r in recent_readings)
-    
-    challenges = [
-        {
-            "id": "reduce_evening_usage",
-            "title": "Evening Energy Challenge",
-            "description": "Reduce evening usage (6-9 PM) by 10% this week",
-            "target_value": 15.0,  # kWh reduction target
-            "current_progress": min(random.uniform(8, 14), 15),
-            "deadline": datetime.utcnow() + timedelta(days=5),
-            "reward_badge": "evening_saver",
-            "active": True
-        },
-        {
-            "id": "weekend_efficiency",
-            "title": "Weekend Efficiency Master",
-            "description": "Keep weekend usage below weekday average",
-            "target_value": 100.0,  # percentage
-            "current_progress": random.uniform(70, 95),
-            "deadline": datetime.utcnow() + timedelta(days=3),
-            "reward_badge": "weekend_warrior",
-            "active": True
-        },
-        {
-            "id": "monthly_saver",
-            "title": "Monthly Energy Saver",
-            "description": "Save €20 compared to last month",
-            "target_value": 20.0,  # euros
-            "current_progress": random.uniform(8, 18),
-            "deadline": datetime.utcnow() + timedelta(days=15),
-            "reward_badge": "monthly_champion",
-            "active": True
-        }
-    ]
-    
-    return {"challenges": challenges}
-
-# Enhanced Badges endpoint
-@api_router.get("/badges")
-async def get_badges(user_id: str = Depends(get_current_user)):
+    # Calculate badge unlocks based on actual performance
     all_badges = [
-        {
-            "id": "energy_saver",
-            "name": "Energy Saver",
-            "description": "Reduced energy consumption by 10% this month",
-            "icon": "🌱",
-            "category": "efficiency",
-            "unlocked_at": datetime.utcnow() - timedelta(days=5)
-        },
-        {
-            "id": "week_warrior",
-            "name": "Week Warrior",
-            "description": "Stayed under daily target for 7 days straight",
-            "icon": "💪",
-            "category": "consistency",
-            "unlocked_at": datetime.utcnow() - timedelta(days=2)
-        },
         {
             "id": "early_adopter",
             "name": "Early Adopter",
             "description": "Joined Energo Smart community",
             "icon": "🚀",
             "category": "milestone",
-            "unlocked_at": datetime.utcnow() - timedelta(days=1)
+            "unlocked_at": datetime.utcnow() - timedelta(days=1),
+            "progress": 100,
+            "reward_euros": 0
+        },
+        {
+            "id": "energy_saver",
+            "name": "Energy Saver",
+            "description": "Reduced energy consumption by 10% this month",
+            "icon": "🌱",
+            "category": "efficiency",
+            "unlocked_at": datetime.utcnow() - timedelta(days=5) if patterns.get("recent_trend_percent", 0) < -8 else None,
+            "progress": max(0, min(100, abs(patterns.get("recent_trend_percent", 0)) * 10)) if patterns.get("recent_trend_percent", 0) < 0 else 0,
+            "reward_euros": round(patterns.get("avg_daily_cost", 3) * 30 * 0.1, 0) if patterns.get("recent_trend_percent", 0) < -8 else 0
+        },
+        {
+            "id": "peak_optimizer",
+            "name": "Peak Hour Optimizer",
+            "description": "Reduced peak hour usage efficiently",
+            "icon": "⚡",
+            "category": "optimization",
+            "unlocked_at": datetime.utcnow() - timedelta(days=3) if patterns.get("peak_vs_offpeak_ratio", 2) < 1.3 else None,
+            "progress": max(0, min(100, (2 - patterns.get("peak_vs_offpeak_ratio", 2)) * 50)),
+            "reward_euros": round(patterns.get("avg_daily_cost", 3) * 30 * 0.15, 0) if patterns.get("peak_vs_offpeak_ratio", 2) < 1.3 else 0
+        },
+        {
+            "id": "weekend_warrior",
+            "name": "Weekend Warrior",
+            "description": "Maintained efficient weekend usage",
+            "icon": "💪",
+            "category": "consistency",
+            "unlocked_at": datetime.utcnow() - timedelta(days=2) if patterns.get("weekend_vs_weekday_ratio", 1.5) < 1.15 else None,
+            "progress": max(0, min(100, (1.5 - patterns.get("weekend_vs_weekday_ratio", 1.5)) * 100)),
+            "reward_euros": round(patterns.get("avg_daily_cost", 3) * 8 * 0.12, 0) if patterns.get("weekend_vs_weekday_ratio", 1.5) < 1.15 else 0
         },
         {
             "id": "subsidy_explorer",
@@ -875,42 +941,73 @@ async def get_badges(user_id: str = Depends(get_current_user)):
             "description": "Explored available energy subsidies",
             "icon": "💰",
             "category": "savings",
-            "unlocked_at": datetime.utcnow() - timedelta(hours=2)
+            "unlocked_at": datetime.utcnow() - timedelta(hours=1),
+            "progress": 100,
+            "reward_euros": 0
         },
         {
             "id": "efficiency_expert",
             "name": "Efficiency Expert",
             "description": "Achieved 20% energy reduction",
-            "icon": "⚡",
-            "category": "efficiency",
-            "unlocked_at": None
-        },
-        {
-            "id": "green_champion",
-            "name": "Green Champion",
-            "description": "Maintained low usage for 30 days",
             "icon": "🏆",
-            "category": "achievement",
-            "unlocked_at": None
+            "category": "efficiency",
+            "unlocked_at": None,
+            "progress": max(0, min(100, abs(patterns.get("recent_trend_percent", 0)) * 5)) if patterns.get("recent_trend_percent", 0) < 0 else 0,
+            "reward_euros": round(patterns.get("avg_daily_cost", 3) * 30 * 0.2, 0)
         }
     ]
     
-    # Calculate some badge unlocks based on user data
-    thirty_days_ago = datetime.utcnow() - timedelta(days=30)
-    readings = await db.energy_readings.find({
+    return {"badges": all_badges}
+
+# Challenges endpoint
+@api_router.get("/challenges")
+async def get_challenges(user_id: str = Depends(get_current_user)):
+    # Get user patterns for realistic challenge progress
+    week_start = datetime.utcnow() - timedelta(days=7)
+    recent_readings = await db.energy_readings.find({
         "user_id": user_id,
-        "timestamp": {"$gte": thirty_days_ago}
+        "timestamp": {"$gte": week_start}
     }, {"_id": 0}).to_list(100)
     
-    if len(readings) >= 25:  # Active user
-        for badge in all_badges:
-            if badge["id"] == "efficiency_expert" and badge["unlocked_at"] is None:
-                # Simulate achievement based on data
-                avg_consumption = sum(r["consumption_kwh"] for r in readings) / len(readings)
-                if avg_consumption < 12:  # Good efficiency
-                    badge["unlocked_at"] = datetime.utcnow() - timedelta(days=random.randint(1, 5))
+    patterns = analyze_consumption_patterns(recent_readings)
     
-    return {"badges": all_badges}
+    challenges = [
+        {
+            "id": "reduce_evening_usage",
+            "title": "Evening Energy Challenge",
+            "description": "Reduce evening usage (7-10 PM) by 15% this week",
+            "target_value": 15.0,  # percentage reduction
+            "current_progress": max(0, min(15, abs(patterns.get("recent_trend_percent", 0)) * 1.5)) if patterns.get("recent_trend_percent", 0) < 0 else random.uniform(2, 8),
+            "deadline": datetime.utcnow() + timedelta(days=4),
+            "reward_badge": "evening_optimizer",
+            "reward_euros": round(patterns.get("avg_daily_cost", 3) * 7 * 0.15, 1),
+            "active": True
+        },
+        {
+            "id": "weekend_efficiency",
+            "title": "Weekend Efficiency Master",
+            "description": "Keep weekend usage below 115% of weekday average",
+            "target_value": 115.0,  # percentage of weekday usage
+            "current_progress": max(100, min(115, patterns.get("weekend_vs_weekday_ratio", 1.2) * 100)),
+            "deadline": datetime.utcnow() + timedelta(days=2),
+            "reward_badge": "weekend_master",
+            "reward_euros": round(patterns.get("avg_daily_cost", 3) * 2 * 0.12, 1),
+            "active": True
+        },
+        {
+            "id": "monthly_saver",
+            "title": "Monthly Energy Saver",
+            "description": "Save €25 compared to last month",
+            "target_value": 25.0,  # euros
+            "current_progress": max(0, min(25, abs(patterns.get("cost_trend_percent", 0)) * patterns.get("avg_daily_cost", 3) * 0.3)) if patterns.get("cost_trend_percent", 0) < 0 else random.uniform(3, 12),
+            "deadline": datetime.utcnow() + timedelta(days=12),
+            "reward_badge": "monthly_champion",
+            "reward_euros": 25,
+            "active": True
+        }
+    ]
+    
+    return {"challenges": challenges}
 
 # Settings endpoints
 @api_router.get("/settings")
@@ -973,7 +1070,7 @@ async def get_subscription_info(user_id: str = Depends(get_current_user)):
     return {
         "current_plan": current_plan,
         "plans": plans,
-        "stripe_integration": "placeholder"  # Placeholder for Stripe integration
+        "stripe_integration": "placeholder"
     }
 
 # Notifications endpoint
@@ -982,34 +1079,34 @@ async def get_notifications(user_id: str = Depends(get_current_user)):
     notifications = [
         {
             "id": str(uuid.uuid4()),
-            "title": "New Subsidy Available!",
-            "message": "A new insulation subsidy is available in your region. Check AI Assistant for details.",
-            "type": "subsidy",
+            "title": "Energy Saver Badge Earned!",
+            "message": "Congratulations! You've earned the Energy Saver badge for reducing usage by 10% this week. You saved €15!",
+            "type": "achievement",
             "timestamp": datetime.utcnow() - timedelta(hours=1),
             "read": False
         },
         {
             "id": str(uuid.uuid4()),
-            "title": "High Usage Alert",
-            "message": "Your energy usage is 15% higher than usual today. Check your heating settings.",
-            "type": "alert",
-            "timestamp": datetime.utcnow() - timedelta(hours=2),
+            "title": "Evening Peak Alert",
+            "message": "Your evening usage (7-10 PM) is 28% higher than average. Consider shifting some activities to save €8/week.",
+            "type": "insight",
+            "timestamp": datetime.utcnow() - timedelta(hours=3),
             "read": False
         },
         {
             "id": str(uuid.uuid4()),
-            "title": "Weekly Summary Ready",
-            "message": "Great job! You saved €12 this week compared to last week. View your detailed report.",
-            "type": "summary",
+            "title": "New Subsidy Available!",
+            "message": "A new insulation subsidy is available in your region. Potential savings: €800/year. Check AI Assistant for details.",
+            "type": "subsidy",
+            "timestamp": datetime.utcnow() - timedelta(hours=6),
+            "read": False
+        },
+        {
+            "id": str(uuid.uuid4()),
+            "title": "Weekly Goal Achievement",
+            "message": "Amazing! You're 85% toward your weekly energy reduction goal. Keep it up to earn the Weekly Champion badge!",
+            "type": "progress",
             "timestamp": datetime.utcnow() - timedelta(days=1),
-            "read": False
-        },
-        {
-            "id": str(uuid.uuid4()),
-            "title": "New Badge Earned!",
-            "message": "Congratulations! You've unlocked the 'Subsidy Explorer' badge for checking available subsidies.",
-            "type": "achievement",
-            "timestamp": datetime.utcnow() - timedelta(days=2),
             "read": True
         }
     ]
