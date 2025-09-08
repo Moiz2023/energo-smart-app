@@ -458,8 +458,8 @@ export default function Settings() {
 
         {/* Actions */}
         <View style={styles.section}>
-          <TouchableOpacity style={styles.logoutButton} onPress={handleLogout}>
-            <Text style={styles.logoutButtonText}>🚪 Logout</Text>
+          <TouchableOpacity style={styles.logoutButton} onPress={handleLogout} disabled={saving}>
+            <Text style={styles.logoutButtonText}>🚪 Sign Out</Text>
           </TouchableOpacity>
         </View>
 
