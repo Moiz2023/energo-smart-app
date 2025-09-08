@@ -702,6 +702,31 @@ const styles = StyleSheet.create({
   activeUnitText: {
     color: '#fff',
   },
+  regionSelector: {
+    flexDirection: 'column',
+    gap: 8,
+  },
+  regionButton: {
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 6,
+    backgroundColor: '#333',
+    borderWidth: 1,
+    borderColor: '#555',
+  },
+  activeRegion: {
+    backgroundColor: '#4CAF50',
+    borderColor: '#4CAF50',
+  },
+  regionText: {
+    color: '#999',
+    fontSize: 12,
+    fontWeight: '600',
+    textAlign: 'center',
+  },
+  activeRegionText: {
+    color: '#fff',
+  },
   switchRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
