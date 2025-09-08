@@ -351,6 +351,33 @@ export default function Settings() {
                 ))}
               </View>
             </View>
+
+            <View style={styles.settingRow}>
+              <Text style={styles.settingLabel}>Region (for Subsidies)</Text>
+              <View style={styles.regionSelector}>
+                {[
+                  { key: 'brussels', label: '🏛️ Brussels', flag: '🏛️' },
+                  { key: 'wallonia', label: '🌲 Wallonia', flag: '🌲' },
+                  { key: 'flanders', label: '🦁 Flanders', flag: '🦁' },
+                ].map((region) => (
+                  <TouchableOpacity
+                    key={region.key}
+                    style={[
+                      styles.regionButton,
+                      settings.region === region.key && styles.activeRegion,
+                    ]}
+                    onPress={() => updateSettings({ ...settings, region: region.key })}
+                  >
+                    <Text style={[
+                      styles.regionText,
+                      settings.region === region.key && styles.activeRegionText,
+                    ]}>
+                      {region.label}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            </View>
           </View>
         </View>
 
