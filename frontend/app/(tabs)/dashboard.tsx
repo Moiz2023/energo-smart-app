@@ -608,8 +608,10 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     marginBottom: 12,
   },
+  badgesScrollView: {
+    paddingVertical: 4,
+  },
   badgeItem: {
-    backgroundColor: '#1a1a1a',
     borderRadius: 12,
     padding: 12,
     marginRight: 12,
@@ -623,15 +625,56 @@ const styles = StyleSheet.create({
     marginBottom: 4,
   },
   badgeName: {
-    color: '#4CAF50',
+    color: '#fff',
     fontSize: 12,
     fontWeight: 'bold',
     textAlign: 'center',
     marginBottom: 2,
   },
   badgeDate: {
-    color: '#999',
+    color: '#A5D6A7',
     fontSize: 10,
+    marginBottom: 2,
+  },
+  badgeReward: {
+    color: '#FFD700',
+    fontSize: 11,
+    fontWeight: 'bold',
+  },
+  savingsHighlight: {
+    backgroundColor: '#1a1a1a',
+    marginHorizontal: 20,
+    marginBottom: 20,
+    padding: 20,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: '#4CAF50',
+  },
+  savingsTitle: {
+    color: '#4CAF50',
+    fontSize: 16,
+    fontWeight: 'bold',
+    marginBottom: 16,
+    textAlign: 'center',
+  },
+  savingsRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+  },
+  savingsStat: {
+    flex: 1,
+    alignItems: 'center',
+  },
+  savingsValue: {
+    color: '#FFD700',
+    fontSize: 18,
+    fontWeight: 'bold',
+    marginBottom: 4,
+  },
+  savingsLabel: {
+    color: '#A5D6A7',
+    fontSize: 11,
+    textAlign: 'center',
   },
   periodSelector: {
     flexDirection: 'row',
