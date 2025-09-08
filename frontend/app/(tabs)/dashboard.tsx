@@ -130,14 +130,14 @@ export default function Dashboard() {
         
         // Get recently unlocked badges (last 7 days)
         const recentlyUnlocked = badgesData.badges
-          .filter((badge: Badge) => {
+          .filter((badge: any) => {
             if (!badge.unlocked_at) return false;
             const unlockedDate = new Date(badge.unlocked_at);
             const sevenDaysAgo = new Date();
             sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
             return unlockedDate >= sevenDaysAgo;
           })
-          .sort((a: Badge, b: Badge) => 
+          .sort((a: any, b: any) => 
             new Date(b.unlocked_at!).getTime() - new Date(a.unlocked_at!).getTime()
           )
           .slice(0, 3);
