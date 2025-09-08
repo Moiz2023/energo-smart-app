@@ -163,37 +163,54 @@ export default function Settings() {
           text: 'Sign Out',
           style: 'destructive',
           onPress: async () => {
+            console.log('Logout process started');
+            setSaving(true);
+            
             try {
-              // Call logout endpoint
+              // Call logout endpoint if available
               const token = await AsyncStorage.getItem('energo_token');
-              if (token) {
+              console.log('Token found:', !!token);
+              
+              if (token && BACKEND_URL) {
                 try {
-                  await fetch(`${BACKEND_URL}/api/auth/logout`, {
+                  console.log('Calling logout API:', `${BACKEND_URL}/api/auth/logout`);
+                  const response = await fetch(`${BACKEND_URL}/api/auth/logout`, {
                     method: 'POST',
                     headers: {
                       'Authorization': `Bearer ${token}`,
                       'Content-Type': 'application/json',
                     },
+                    timeout: 5000,
                   });
+                  console.log('Logout API response:', response.status);
                 } catch (error) {
-                  console.log('Logout API call failed, continuing with local logout');
+                  console.log('Logout API call failed, continuing with local logout:', error);
                 }
               }
               
               // Clear local storage
+              console.log('Clearing local storage...');
               await AsyncStorage.multiRemove(['energo_token', 'energo_user']);
+              console.log('Local storage cleared');
               
               // Navigate to login screen
+              console.log('Navigating to login screen...');
               router.replace('/');
+              
             } catch (error) {
               console.error('Logout error:', error);
+              Alert.alert('Error', 'Logout failed. Please try again.');
+              
               // Even if there's an error, still try to clear storage and navigate
               try {
                 await AsyncStorage.multiRemove(['energo_token', 'energo_user']);
                 router.replace('/');
               } catch (clearError) {
                 console.error('Failed to clear storage:', clearError);
+                Alert.alert('Error', 'Failed to clear session. Please restart the app.');
               }
+            } finally {
+              setSaving(false);
             }
           },
         },
