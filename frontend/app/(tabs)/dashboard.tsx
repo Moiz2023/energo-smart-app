@@ -293,21 +293,59 @@ export default function Dashboard() {
           </TouchableOpacity>
         </View>
 
-        {/* Recent Badges - Gamification */}
+        {/* Enhanced Gamification Section */}
         {recentBadges.length > 0 && (
           <View style={styles.badgesContainer}>
             <Text style={styles.badgesTitle}>🏆 Recent Achievements</Text>
-            <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.badgesScrollView}>
               {recentBadges.map((badge) => (
-                <View key={badge.id} style={styles.badgeItem}>
+                <LinearGradient
+                  key={badge.id}
+                  colors={['#1B5E20', '#2E7D32']}
+                  style={styles.badgeItem}
+                >
                   <Text style={styles.badgeIcon}>{badge.icon}</Text>
                   <Text style={styles.badgeName}>{badge.name}</Text>
                   <Text style={styles.badgeDate}>
                     {new Date(badge.unlocked_at!).toLocaleDateString()}
                   </Text>
-                </View>
+                  {badge.reward_euros > 0 && (
+                    <Text style={styles.badgeReward}>+€{badge.reward_euros}</Text>
+                  )}
+                </LinearGradient>
               ))}
             </ScrollView>
+          </View>
+        )}
+
+        {/* Energy Saving Highlights */}
+        {dashboardData?.summary && (
+          <View style={styles.savingsHighlight}>
+            <Text style={styles.savingsTitle}>💰 Your Energy Savings Impact</Text>
+            <View style={styles.savingsRow}>
+              <View style={styles.savingsStat}>
+                <Text style={styles.savingsValue}>
+                  {dashboardData.summary.consumption_change_percent < 0 ? 
+                    `€${Math.abs(dashboardData.summary.cost_change_percent * dashboardData.summary.current_cost_euros / 100).toFixed(0)}` : 
+                    '€0'}
+                </Text>
+                <Text style={styles.savingsLabel}>Saved This Week</Text>
+              </View>
+              <View style={styles.savingsStat}>
+                <Text style={styles.savingsValue}>
+                  {dashboardData.summary.consumption_change_percent < 0 ? 
+                    `${Math.abs(dashboardData.summary.consumption_change_percent).toFixed(1)}%` : 
+                    '0%'}
+                </Text>
+                <Text style={styles.savingsLabel}>Reduced Usage</Text>
+              </View>
+              <View style={styles.savingsStat}>
+                <Text style={styles.savingsValue}>
+                  €{(dashboardData.summary.average_daily_cost * 365 * 0.15).toFixed(0)}
+                </Text>
+                <Text style={styles.savingsLabel}>Annual Potential</Text>
+              </View>
+            </View>
           </View>
         )}
 
