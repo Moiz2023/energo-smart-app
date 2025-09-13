@@ -181,14 +181,14 @@ class EnergoBackendTester:
                 if not missing_fields:
                     # Check summary data structure
                     summary = data["summary"]
-                    summary_fields = ["total_consumption_kwh", "total_cost_euros", "month_consumption_kwh", "month_cost_euros"]
+                    summary_fields = ["current_consumption_kwh", "current_cost_euros", "consumption_change_percent", "cost_change_percent"]
                     
                     if all(field in summary for field in summary_fields):
                         self.log_result("Dashboard Data Structure", True, f"All required fields present")
                         
                         # Validate data types and values
-                        if (isinstance(summary["total_consumption_kwh"], (int, float)) and 
-                            isinstance(summary["total_cost_euros"], (int, float)) and
+                        if (isinstance(summary["current_consumption_kwh"], (int, float)) and 
+                            isinstance(summary["current_cost_euros"], (int, float)) and
                             isinstance(data["chart_data"], list)):
                             self.log_result("Dashboard Data Validation", True, f"Data types correct, {len(data['chart_data'])} chart points")
                             return True
