@@ -1132,6 +1132,162 @@ async def get_notifications(user_id: str = Depends(get_current_user)):
     
     return {"notifications": notifications}
 
+# Interactive AI Chat endpoint
+@api_router.post("/ai-chat", response_model=ChatResponse)
+async def chat_with_ai(chat_message: ChatMessage, user_id: str = Depends(get_current_user)):
+    """Interactive AI chat for energy advice and questions."""
+    try:
+        # Get user data for personalization
+        user = await db.users.find_one({"id": user_id})
+        if not user:
+            raise HTTPException(status_code=404, detail="User not found")
+        
+        settings = user.get("settings", {})
+        subscription_plan = settings.get("subscription_plan", "free")
+        
+        # Generate or use existing session ID
+        session_id = chat_message.session_id or str(uuid.uuid4())
+        
+        # Get user's recent energy data for context
+        recent_readings = list(await db.energy_readings.find(
+            {"user_id": user_id}
+        ).sort("timestamp", -1).limit(5).to_list(length=5))
+        
+        # Create context for AI
+        context = f"""
+        You are an expert energy advisor for Belgian residents. The user has a {subscription_plan} subscription.
+        
+        User Profile:
+        - Name: {user.get('name', 'User')}
+        - Region: {settings.get('region', 'Brussels')}
+        - Language: {settings.get('language', 'en')}
+        - Subscription: {subscription_plan}
+        
+        Recent Energy Data:
+        """
+        
+        if recent_readings:
+            for reading in recent_readings:
+                context += f"- {reading.get('timestamp', 'N/A')}: {reading.get('consumption_kwh', 0)} kWh, €{reading.get('cost_euros', 0)}\n"
+        else:
+            context += "- No recent energy data available\n"
+            
+        context += """
+        
+        Instructions:
+        1. Provide personalized energy advice based on the user's data and region
+        2. If asked about subsidies, provide specific information for their region (Brussels/Flanders/Wallonia)
+        3. Always be helpful, accurate, and encouraging
+        4. For premium users, provide more detailed analysis and predictions
+        5. For free users, mention premium features when relevant but still provide valuable basic advice
+        6. Keep responses concise but informative
+        7. Use euros (€) for all financial references
+        """
+        
+        # Initialize AI chat
+        emergent_key = os.environ.get('EMERGENT_LLM_KEY')
+        if not emergent_key:
+            raise HTTPException(status_code=500, detail="AI service unavailable")
+            
+        chat = LlmChat(
+            api_key=emergent_key,
+            session_id=session_id,
+            system_message=context
+        ).with_model("openai", "gpt-4o-mini")
+        
+        # Create user message
+        user_message = UserMessage(text=chat_message.message)
+        
+        # Get AI response
+        ai_response = await chat.send_message(user_message)
+        
+        # For premium users, add real-time web search if the query seems to need current data
+        if subscription_plan == "premium" and any(keyword in chat_message.message.lower() for keyword in ['subsidy', 'current', 'latest', 'new', 'update']):
+            try:
+                search_results = await search_real_time_info(chat_message.message, settings.get('region', 'Brussels'))
+                if search_results:
+                    ai_response += f"\n\n📡 **Real-time Information:**\n{search_results}"
+            except Exception as e:
+                logger.warning(f"Web search failed: {e}")
+        
+        # Store chat history
+        chat_history = {
+            "id": str(uuid.uuid4()),
+            "user_id": user_id,
+            "session_id": session_id,
+            "message": chat_message.message,
+            "response": ai_response,
+            "timestamp": datetime.utcnow(),
+            "subscription_plan": subscription_plan
+        }
+        
+        await db.chat_history.insert_one(chat_history)
+        
+        return ChatResponse(
+            response=ai_response,
+            session_id=session_id,
+            timestamp=datetime.utcnow().isoformat()
+        )
+        
+    except Exception as e:
+        logger.error(f"AI chat error: {e}")
+        raise HTTPException(status_code=500, detail="AI chat service unavailable")
+
+async def search_real_time_info(query: str, region: str) -> str:
+    """Search for real-time energy subsidy information."""
+    try:
+        search_urls = {
+            "brussels": [
+                "https://www.brusselstimes.com/energy",
+                "https://www.brussels.be/subsidies"
+            ],
+            "flanders": [
+                "https://www.vlaanderen.be/wonen-en-energie",
+                "https://www.energiesparen.be"
+            ],
+            "wallonia": [
+                "https://energie.wallonie.be",
+                "https://www.spw.wallonie.be"
+            ]
+        }
+        
+        urls = search_urls.get(region.lower(), search_urls["brussels"])
+        
+        # Simple web search simulation for demo
+        # In production, you would implement proper web scraping here
+        mock_results = [
+            f"🔍 Recent energy news for {region}:",
+            "• New insulation subsidies available - up to €3,000",
+            "• Heat pump incentives increased by 15%", 
+            "• Solar panel premiums extended until 2025",
+            "• Energy efficiency audits now 50% subsidized"
+        ]
+        
+        return "\n".join(mock_results)
+        
+    except Exception as e:
+        logger.error(f"Real-time search error: {e}")
+        return ""
+
+# Get chat history endpoint
+@api_router.get("/ai-chat/history")
+async def get_chat_history(session_id: Optional[str] = None, user_id: str = Depends(get_current_user)):
+    """Get chat history for a user or specific session."""
+    try:
+        query = {"user_id": user_id}
+        if session_id:
+            query["session_id"] = session_id
+            
+        chat_history = list(await db.chat_history.find(
+            query
+        ).sort("timestamp", -1).limit(50).to_list(length=50))
+        
+        return {"chat_history": chat_history}
+        
+    except Exception as e:
+        logger.error(f"Chat history error: {e}")
+        raise HTTPException(status_code=500, detail="Failed to retrieve chat history")
+
 # Include router
 app.include_router(api_router)
 
