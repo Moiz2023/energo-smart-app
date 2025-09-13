@@ -53,6 +53,7 @@ interface Badge {
   description: string;
   icon: string;
   unlocked_at: string | null;
+  reward_euros?: number;
 }
 
 export default function Dashboard() {
