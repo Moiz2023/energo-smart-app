@@ -192,6 +192,9 @@ export default function Settings() {
               await AsyncStorage.multiRemove(['energo_token', 'energo_user']);
               console.log('Local storage cleared');
               
+              // Reset user state
+              setUser(null);
+              
               // Navigate to login screen
               console.log('Navigating to login screen...');
               router.replace('/');
