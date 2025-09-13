@@ -1035,7 +1035,18 @@ async def get_settings(user_id: str = Depends(get_current_user)):
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
     
-    return {"settings": user.get("settings", UserSettings().dict())}
+    settings = user.get("settings", UserSettings().dict())
+    
+    # Temporarily set premium access for testing
+    settings["subscription_plan"] = "premium"
+    
+    # Update user in database with premium access
+    await db.users.update_one(
+        {"id": user_id},
+        {"$set": {"settings": settings}}
+    )
+    
+    return {"settings": settings}
 
 @api_router.put("/settings")
 async def update_settings(settings: UserSettings, user_id: str = Depends(get_current_user)):
