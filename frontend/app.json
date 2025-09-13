@@ -23,6 +23,12 @@
       "output": "static",
       "favicon": "./assets/images/favicon.png"
     },
+    "cli": {
+      "appVersionSource": "never"
+    },
+    "packagerOpts": {
+      "port": 3000
+    },
     "plugins": [
       "expo-router",
       [
