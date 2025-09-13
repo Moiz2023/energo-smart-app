@@ -743,7 +743,7 @@ class EnergoBackendTester:
         """Test accessing protected endpoints without authentication"""
         print("\n🔒 Testing Unauthorized Access...")
         
-        endpoints = ["/dashboard", "/ai-tips", "/badges", "/notifications"]
+        endpoints = ["/dashboard", "/ai-insights", "/badges", "/notifications"]
         
         for endpoint in endpoints:
             try:
