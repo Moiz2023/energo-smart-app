@@ -110,7 +110,6 @@ export default function AIAssistant() {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json',
         },
-        timeout: 10000,
       });
 
       if (response.status === 401) {
