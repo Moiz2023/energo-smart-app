@@ -169,32 +169,36 @@ export default function Dashboard() {
           style: 'destructive',
           onPress: async () => {
             try {
+              console.log('Attempting logout...');
+              
               // Call logout endpoint
               const token = await AsyncStorage.getItem('energo_token');
               if (token) {
                 try {
-                  await fetch(`${BACKEND_URL}/auth/logout`, {
+                  const response = await fetch(`${BACKEND_URL}/auth/logout`, {
                     method: 'POST',
                     headers: {
                       'Authorization': `Bearer ${token}`,
                       'Content-Type': 'application/json',
                     },
                   });
+                  console.log('Logout API response:', response.status);
                 } catch (error) {
-                  console.log('Logout API call failed, continuing with local logout');
+                  console.log('Logout API call failed, continuing with local logout:', error);
                 }
               }
               
               // Clear local storage
               await AsyncStorage.multiRemove(['energo_token', 'energo_user']);
+              console.log('AsyncStorage cleared');
               
               // Reset authentication state
               setUser(null);
+              console.log('User state reset');
               
               // Navigate to login screen
               router.replace('/');
-              
-              console.log('Successfully logged out');
+              console.log('Navigation initiated');
             } catch (error) {
               console.error('Logout error:', error);
               // Even if there's an error, still try to clear storage and navigate
