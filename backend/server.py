@@ -1259,42 +1259,6 @@ async def chat_with_ai(chat_message: ChatMessage, user_id: str = Depends(get_cur
         logger.error(f"AI chat error: {e}")
         raise HTTPException(status_code=500, detail="AI chat service unavailable")
 
-async def search_real_time_info(query: str, region: str) -> str:
-    """Search for real-time energy subsidy information."""
-    try:
-        search_urls = {
-            "brussels": [
-                "https://www.brusselstimes.com/energy",
-                "https://www.brussels.be/subsidies"
-            ],
-            "flanders": [
-                "https://www.vlaanderen.be/wonen-en-energie",
-                "https://www.energiesparen.be"
-            ],
-            "wallonia": [
-                "https://energie.wallonie.be",
-                "https://www.spw.wallonie.be"
-            ]
-        }
-        
-        urls = search_urls.get(region.lower(), search_urls["brussels"])
-        
-        # Simple web search simulation for demo
-        # In production, you would implement proper web scraping here
-        mock_results = [
-            f"🔍 Recent energy news for {region}:",
-            "• New insulation subsidies available - up to €3,000",
-            "• Heat pump incentives increased by 15%", 
-            "• Solar panel premiums extended until 2025",
-            "• Energy efficiency audits now 50% subsidized"
-        ]
-        
-        return "\n".join(mock_results)
-        
-    except Exception as e:
-        logger.error(f"Real-time search error: {e}")
-        return ""
-
 async def get_fluvius_data(user_location: str = "Brussels") -> Dict:
     """
     Integrate with Fluvius Open Data API for realistic energy consumption data.
