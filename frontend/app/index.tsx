@@ -49,8 +49,14 @@ export default function Index() {
 
   const checkAuthStatus = async () => {
     try {
+      console.log('Checking auth status...');
+      console.log('Backend URL:', BACKEND_URL);
+      
       const token = await AsyncStorage.getItem('energo_token');
       const userData = await AsyncStorage.getItem('energo_user');
+      
+      console.log('Token exists:', !!token);
+      console.log('User data exists:', !!userData);
       
       if (token && userData) {
         setUser(JSON.parse(userData));
@@ -66,6 +72,7 @@ export default function Index() {
       console.error('Error checking auth status:', error);
       setIsAuthenticated(false);
     } finally {
+      console.log('Auth check complete, setting initialLoading to false');
       setInitialLoading(false);
     }
   };
