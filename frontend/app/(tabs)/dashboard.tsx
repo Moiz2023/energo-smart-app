@@ -105,14 +105,12 @@ export default function Dashboard() {
             'Authorization': `Bearer ${token}`,
             'Content-Type': 'application/json',
           },
-          timeout: 10000,
         }),
         fetch(`${BACKEND_URL}/api/badges`, {
           headers: {
             'Authorization': `Bearer ${token}`,
             'Content-Type': 'application/json',
           },
-          timeout: 10000,
         })
       ]);
 
