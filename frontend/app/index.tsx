@@ -121,7 +121,7 @@ export default function Index() {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify(body),
-        timeout: 15000, // 15 second timeout
+        
       });
 
       const data: AuthResponse = await response.json();
