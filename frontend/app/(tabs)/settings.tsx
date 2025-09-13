@@ -179,7 +179,7 @@ export default function Settings() {
                       'Authorization': `Bearer ${token}`,
                       'Content-Type': 'application/json',
                     },
-                    timeout: 5000,
+                    
                   });
                   console.log('Logout API response:', response.status);
                 } catch (error) {
