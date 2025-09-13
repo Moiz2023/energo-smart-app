@@ -21,7 +21,7 @@ def get_backend_url():
                     return f"{base_url}/api"
     except Exception as e:
         print(f"Error reading frontend .env: {e}")
-    return "https://energo-fix.preview.emergentagent.com/api"
+    return "https://energo-premium.preview.emergentagent.com/api"
 
 BASE_URL = get_backend_url()
 print(f"Testing backend at: {BASE_URL}")
