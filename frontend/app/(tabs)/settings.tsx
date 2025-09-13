@@ -76,7 +76,7 @@ export default function Settings() {
         return;
       }
 
-      const response = await fetch(`${BACKEND_URL}/api/settings`, {
+      const response = await fetch(`${BACKEND_URL}/settings`, {
         headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json',
@@ -129,7 +129,7 @@ export default function Settings() {
       const token = await AsyncStorage.getItem('energo_token');
       if (!token) return;
 
-      const response = await fetch(`${BACKEND_URL}/api/settings`, {
+      const response = await fetch(`${BACKEND_URL}/settings`, {
         method: 'PUT',
         headers: {
           'Authorization': `Bearer ${token}`,
