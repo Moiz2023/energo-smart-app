@@ -105,7 +105,7 @@ export default function AIAssistant() {
         return;
       }
 
-      const response = await fetch(`${BACKEND_URL}/api/ai-insights`, {
+      const response = await fetch(`${BACKEND_URL}/ai-insights`, {
         headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json',
