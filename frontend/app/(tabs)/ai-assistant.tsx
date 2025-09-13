@@ -12,6 +12,7 @@ import {
   TextInput,
   KeyboardAvoidingView,
   Platform,
+  Linking,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -241,6 +242,40 @@ export default function AIAssistant() {
     } finally {
       setChatLoading(false);
     }
+  };
+
+  const handleLearnMore = (insight: AIInsight) => {
+    Alert.alert(
+      `${getCategoryIcon(insight.category)} ${insight.title}`,
+      `Category: ${insight.category.charAt(0).toUpperCase() + insight.category.slice(1)}\n\nPriority: ${insight.priority.toUpperCase()}\n\n${insight.content}\n\nPotential Savings: ${insight.potential_savings}`,
+      [
+        { text: 'Close', style: 'cancel' },
+        {
+          text: 'Get More Tips',
+          onPress: () => {
+            setActiveTab('chat');
+            setCurrentMessage(`Tell me more about ${insight.category} energy optimization`);
+          }
+        }
+      ]
+    );
+  };
+
+  const handleSubsidyApplication = (subsidy: Subsidy) => {
+    Alert.alert(
+      `${getCategoryIcon(subsidy.category)} ${subsidy.title}`,
+      `Region: ${subsidy.region}\nAmount: ${subsidy.amount}\n\nEligibility:\n${subsidy.eligibility.map(req => `• ${req}`).join('\n')}\n\nApplication Process:\n${subsidy.application_process}${subsidy.deadline ? `\n\nDeadline: ${subsidy.deadline}` : ''}`,
+      [
+        { text: 'Close', style: 'cancel' },
+        {
+          text: 'Ask AI for Help',
+          onPress: () => {
+            setActiveTab('chat');
+            setCurrentMessage(`Help me apply for the ${subsidy.title} subsidy in ${subsidy.region}`);
+          }
+        }
+      ]
+    );
   };
 
   const onRefresh = () => {
@@ -571,7 +606,10 @@ export default function AIAssistant() {
                     
                     <View style={styles.insightFooter}>
                       <Text style={styles.savingsText}>💰 Potential savings: {insight.potential_savings}</Text>
-                      <TouchableOpacity style={styles.actionButton}>
+                      <TouchableOpacity 
+                        style={styles.actionButton}
+                        onPress={() => handleLearnMore(insight)}
+                      >
                         <Text style={styles.actionButtonText}>Learn More</Text>
                       </TouchableOpacity>
                     </View>
@@ -595,9 +633,11 @@ export default function AIAssistant() {
                 {data.subsidies.map((subsidy) => (
                   <View key={subsidy.id} style={styles.subsidyCard}>
                     <View style={styles.subsidyHeader}>
-                      <View style={styles.subsidyTitleRow}>
+                      <View style={styles.subsidyTitleContainer}>
                         <Text style={styles.subsidyCategoryIcon}>{getCategoryIcon(subsidy.category)}</Text>
-                        <Text style={styles.subsidyTitle}>{subsidy.title}</Text>
+                        <View style={styles.subsidyTitleWrapper}>
+                          <Text style={styles.subsidyTitle}>{subsidy.title}</Text>
+                        </View>
                       </View>
                       <View style={styles.subsidyAmount}>
                         <Text style={styles.subsidyAmountText}>{subsidy.amount}</Text>
@@ -639,7 +679,10 @@ export default function AIAssistant() {
                       )}
                     </View>
 
-                    <TouchableOpacity style={styles.applyButton}>
+                    <TouchableOpacity 
+                      style={styles.applyButton}
+                      onPress={() => handleSubsidyApplication(subsidy)}
+                    >
                       <Text style={styles.applyButtonText}>Get Application Details</Text>
                     </TouchableOpacity>
                   </View>
@@ -1012,27 +1055,33 @@ const styles = StyleSheet.create({
     alignItems: 'flex-start',
     marginBottom: 12,
   },
-  subsidyTitleRow: {
+  subsidyTitleContainer: {
     flexDirection: 'row',
-    alignItems: 'center',
+    alignItems: 'flex-start',
     flex: 1,
     marginRight: 12,
   },
   subsidyCategoryIcon: {
     fontSize: 20,
     marginRight: 8,
+    marginTop: 2,
+  },
+  subsidyTitleWrapper: {
+    flex: 1,
   },
   subsidyTitle: {
     color: '#fff',
     fontSize: 16,
     fontWeight: 'bold',
-    flex: 1,
+    lineHeight: 22,
+    flexWrap: 'wrap',
   },
   subsidyAmount: {
     backgroundColor: '#4CAF50',
     paddingHorizontal: 12,
     paddingVertical: 6,
     borderRadius: 6,
+    alignSelf: 'flex-start',
   },
   subsidyAmountText: {
     color: '#fff',
