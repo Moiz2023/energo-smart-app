@@ -1347,6 +1347,36 @@ async def get_chat_history(session_id: Optional[str] = None, user_id: str = Depe
         logger.error(f"Chat history error: {e}")
         raise HTTPException(status_code=500, detail="Failed to retrieve chat history")
 
+# Fluvius data endpoint for premium users
+@api_router.get("/fluvius-data")
+async def get_fluvius_energy_data(user_id: str = Depends(get_current_user)):
+    """Get real energy consumption data from Fluvius API for premium users."""
+    try:
+        user = await db.users.find_one({"id": user_id})
+        if not user:
+            raise HTTPException(status_code=404, detail="User not found")
+        
+        settings = user.get("settings", {})
+        subscription_plan = settings.get("subscription_plan", "free")
+        
+        # Premium feature check
+        if subscription_plan != "premium":
+            return {
+                "message": "Fluvius real-time data is a premium feature",
+                "upgrade_message": "Upgrade to premium to access real energy consumption data from Fluvius",
+                "data_source": "Premium Feature",
+                "is_real_data": False
+            }
+        
+        region = settings.get("region", "Brussels")
+        fluvius_data = await get_fluvius_data(region)
+        
+        return fluvius_data
+        
+    except Exception as e:
+        logger.error(f"Fluvius data error: {e}")
+        raise HTTPException(status_code=500, detail="Failed to retrieve energy data")
+
 # Include router
 app.include_router(api_router)
 
