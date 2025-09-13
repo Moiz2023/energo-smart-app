@@ -1224,14 +1224,17 @@ async def chat_with_ai(chat_message: ChatMessage, user_id: str = Depends(get_cur
         # Get AI response
         ai_response = await chat.send_message(user_message)
         
-        # For premium users, add real-time web search if the query seems to need current data
-        if subscription_plan == "premium" and any(keyword in chat_message.message.lower() for keyword in ['subsidy', 'current', 'latest', 'new', 'update']):
+        # For premium users, add real-time Fluvius data if the query seems to need current data
+        if subscription_plan == "premium" and any(keyword in chat_message.message.lower() for keyword in ['energy', 'consumption', 'data', 'current', 'latest', 'new', 'update']):
             try:
-                search_results = await search_real_time_info(chat_message.message, settings.get('region', 'Brussels'))
-                if search_results:
-                    ai_response += f"\n\n📡 **Real-time Information:**\n{search_results}"
+                fluvius_data = await get_fluvius_data(settings.get('region', 'Brussels'))
+                if fluvius_data and fluvius_data.get('data'):
+                    data_summary = f"📊 **Real-time Energy Data from {fluvius_data['data_source']}:**\n"
+                    for item in fluvius_data['data'][:3]:  # Show top 3 results
+                        data_summary += f"• {item.get('municipality', 'N/A')}: {item.get('consumption_kwh', item.get('consumption_mwh', 0))} {'kWh' if 'consumption_kwh' in item else 'MWh'} ({item.get('period', 'N/A')})\n"
+                    ai_response += f"\n\n{data_summary}"
             except Exception as e:
-                logger.warning(f"Web search failed: {e}")
+                logger.warning(f"Fluvius data fetch failed: {e}")
         
         # Store chat history
         chat_history = {
