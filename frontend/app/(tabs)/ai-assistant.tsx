@@ -245,16 +245,17 @@ export default function AIAssistant() {
   };
 
   const handleLearnMore = (insight: AIInsight) => {
+    console.log('Learn More clicked for insight:', insight.title);
     Alert.alert(
-      `${getCategoryIcon(insight.category)} ${insight.title}`,
-      `Category: ${insight.category.charAt(0).toUpperCase() + insight.category.slice(1)}\n\nPriority: ${insight.priority.toUpperCase()}\n\n${insight.content}\n\nPotential Savings: ${insight.potential_savings}`,
+      `💡 ${insight.title}`,
+      `${insight.content}\n\n💰 Potential Savings: ${insight.potential_savings}\n\n📊 Priority: ${insight.priority.toUpperCase()}\n🏷️ Category: ${insight.category}`,
       [
         { text: 'Close', style: 'cancel' },
         {
-          text: 'Get More Tips',
+          text: 'Ask AI for More Tips',
           onPress: () => {
             setActiveTab('chat');
-            setCurrentMessage(`Tell me more about ${insight.category} energy optimization`);
+            setCurrentMessage(`Tell me more about ${insight.category} energy optimization and how to achieve ${insight.potential_savings} in savings`);
           }
         }
       ]
@@ -262,8 +263,9 @@ export default function AIAssistant() {
   };
 
   const handleSubsidyApplication = (subsidy: Subsidy) => {
+    console.log('Subsidy application clicked for:', subsidy.title);
     Alert.alert(
-      `${getCategoryIcon(subsidy.category)} ${subsidy.title}`,
+      `💰 ${subsidy.title}`,
       `Region: ${subsidy.region}\nAmount: ${subsidy.amount}\n\nEligibility:\n${subsidy.eligibility.map(req => `• ${req}`).join('\n')}\n\nApplication Process:\n${subsidy.application_process}${subsidy.deadline ? `\n\nDeadline: ${subsidy.deadline}` : ''}`,
       [
         { text: 'Close', style: 'cancel' },
@@ -271,7 +273,7 @@ export default function AIAssistant() {
           text: 'Ask AI for Help',
           onPress: () => {
             setActiveTab('chat');
-            setCurrentMessage(`Help me apply for the ${subsidy.title} subsidy in ${subsidy.region}`);
+            setCurrentMessage(`Help me apply for the ${subsidy.title} subsidy in ${subsidy.region}. I need step-by-step guidance.`);
           }
         }
       ]
@@ -633,11 +635,9 @@ export default function AIAssistant() {
                 {data.subsidies.map((subsidy) => (
                   <View key={subsidy.id} style={styles.subsidyCard}>
                     <View style={styles.subsidyHeader}>
-                      <View style={styles.subsidyTitleContainer}>
+                      <View style={styles.subsidyTitleRow}>
                         <Text style={styles.subsidyCategoryIcon}>{getCategoryIcon(subsidy.category)}</Text>
-                        <View style={styles.subsidyTitleWrapper}>
-                          <Text style={styles.subsidyTitle}>{subsidy.title}</Text>
-                        </View>
+                        <Text style={styles.subsidyTitle}>{subsidy.title}</Text>
                       </View>
                       <View style={styles.subsidyAmount}>
                         <Text style={styles.subsidyAmountText}>{subsidy.amount}</Text>
@@ -1055,33 +1055,27 @@ const styles = StyleSheet.create({
     alignItems: 'flex-start',
     marginBottom: 12,
   },
-  subsidyTitleContainer: {
+  subsidyTitleRow: {
     flexDirection: 'row',
-    alignItems: 'flex-start',
+    alignItems: 'center',
     flex: 1,
     marginRight: 12,
   },
   subsidyCategoryIcon: {
     fontSize: 20,
     marginRight: 8,
-    marginTop: 2,
-  },
-  subsidyTitleWrapper: {
-    flex: 1,
   },
   subsidyTitle: {
     color: '#fff',
     fontSize: 16,
     fontWeight: 'bold',
-    lineHeight: 22,
-    flexWrap: 'wrap',
+    flex: 1,
   },
   subsidyAmount: {
     backgroundColor: '#4CAF50',
     paddingHorizontal: 12,
     paddingVertical: 6,
     borderRadius: 6,
-    alignSelf: 'flex-start',
   },
   subsidyAmountText: {
     color: '#fff',
