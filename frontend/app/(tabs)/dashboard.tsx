@@ -188,8 +188,13 @@ export default function Dashboard() {
               // Clear local storage
               await AsyncStorage.multiRemove(['energo_token', 'energo_user']);
               
+              // Reset authentication state
+              setUser(null);
+              
               // Navigate to login screen
               router.replace('/');
+              
+              console.log('Successfully logged out');
             } catch (error) {
               console.error('Logout error:', error);
               // Even if there's an error, still try to clear storage and navigate
