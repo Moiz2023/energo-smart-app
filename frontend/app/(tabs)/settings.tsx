@@ -206,6 +206,7 @@ export default function Settings() {
               // Even if there's an error, still try to clear storage and navigate
               try {
                 await AsyncStorage.multiRemove(['energo_token', 'energo_user']);
+                setUser(null);
                 router.replace('/');
               } catch (clearError) {
                 console.error('Failed to clear storage:', clearError);
