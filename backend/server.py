@@ -863,6 +863,7 @@ async def get_dashboard(period: str = "week", user_id: str = Depends(get_current
             "estimated_savings": f"€{round(patterns.get('avg_daily_cost', 3) * 7 * target_reduction, 1)}/week potential"
         },
         "chart_data": chart_data,
+        "recent_readings": current_readings[:10],  # Add recent readings for compatibility
         "patterns": patterns
     }
 
