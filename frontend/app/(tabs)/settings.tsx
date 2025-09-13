@@ -25,6 +25,7 @@ interface UserSettings {
   high_usage_alerts: boolean;
   weekly_summary: boolean;
   subscription_plan: string;
+  region?: string;
 }
 
 interface SubscriptionPlan {
