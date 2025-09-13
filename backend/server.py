@@ -1061,7 +1061,17 @@ async def update_settings(settings: UserSettings, user_id: str = Depends(get_cur
 async def get_subscription_info(user_id: str = Depends(get_current_user)):
     user = await db.users.find_one({"id": user_id})
     settings = user.get("settings", {})
-    current_plan = settings.get("subscription_plan", "free")
+    
+    # Force premium for testing
+    current_plan = "premium"
+    
+    # Update user settings with premium
+    if settings.get("subscription_plan") != "premium":
+        settings["subscription_plan"] = "premium"
+        await db.users.update_one(
+            {"id": user_id},
+            {"$set": {"settings": settings}}
+        )
     
     plans = {
         "free": {
@@ -1076,7 +1086,8 @@ async def get_subscription_info(user_id: str = Depends(get_current_user)):
             ],
             "limitations": [
                 "Limited historical data (30 days)",
-                "Basic insights only"
+                "Basic insights only",
+                "No interactive AI chat"
             ]
         },
         "premium": {
@@ -1085,7 +1096,8 @@ async def get_subscription_info(user_id: str = Depends(get_current_user)):
             "features": [
                 "Advanced energy analytics",
                 "Unlimited AI insights",
-                "Live subsidy updates",
+                "Interactive AI chat assistant",
+                "Real-time subsidy updates",
                 "Personalized subsidy calculator",
                 "Predictive forecasting",
                 "Custom challenges",
