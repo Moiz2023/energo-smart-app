@@ -83,6 +83,22 @@ class AIInsight(BaseModel):
     priority: str = "medium"  # low, medium, high
     personalized: bool = True
 
+class ChatMessage(BaseModel):
+    message: str
+    session_id: Optional[str] = None
+
+class ChatResponse(BaseModel):
+    response: str
+    session_id: str
+    timestamp: str
+
+class ChatHistoryItem(BaseModel):
+    id: str
+    message: str
+    response: str
+    timestamp: str
+    session_id: str
+
 class SubsidyInfo(BaseModel):
     id: str
     title: str
