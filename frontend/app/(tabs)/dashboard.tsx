@@ -107,7 +107,7 @@ export default function Dashboard() {
             'Content-Type': 'application/json',
           },
         }),
-        fetch(`${BACKEND_URL}/api/badges`, {
+        fetch(`${BACKEND_URL}/badges`, {
           headers: {
             'Authorization': `Bearer ${token}`,
             'Content-Type': 'application/json',
