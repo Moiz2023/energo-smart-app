@@ -173,7 +173,7 @@ export default function Dashboard() {
               const token = await AsyncStorage.getItem('energo_token');
               if (token) {
                 try {
-                  await fetch(`${BACKEND_URL}/api/auth/logout`, {
+                  await fetch(`${BACKEND_URL}/auth/logout`, {
                     method: 'POST',
                     headers: {
                       'Authorization': `Bearer ${token}`,
