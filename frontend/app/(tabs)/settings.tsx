@@ -105,7 +105,7 @@ export default function Settings() {
       const token = await AsyncStorage.getItem('energo_token');
       if (!token) return;
 
-      const response = await fetch(`${BACKEND_URL}/api/subscription`, {
+      const response = await fetch(`${BACKEND_URL}/subscription`, {
         headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json',
