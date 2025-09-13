@@ -35,6 +35,7 @@ interface Badge {
   icon: string;
   category: string;
   unlocked_at: string | null;
+  reward_euros?: number;
 }
 
 interface ChallengesData {
