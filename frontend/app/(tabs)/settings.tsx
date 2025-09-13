@@ -170,6 +170,8 @@ export default function Settings() {
               const token = await AsyncStorage.getItem('energo_token');
               console.log('Token found:', !!token);
               
+              console.log('Starting logout process...');
+              
               if (token && BACKEND_URL) {
                 try {
                   console.log('Calling logout API:', `${BACKEND_URL}/auth/logout`);
@@ -179,24 +181,24 @@ export default function Settings() {
                       'Authorization': `Bearer ${token}`,
                       'Content-Type': 'application/json',
                     },
-                    
                   });
-                  console.log('Logout API response:', response.status);
+                  console.log('Logout API response status:', response.status);
                 } catch (error) {
-                  console.log('Logout API call failed, continuing with local logout:', error);
+                  console.error('Error calling logout API:', error);
                 }
               }
               
-              // Clear local storage
-              console.log('Clearing local storage...');
+              // Clear token and user data
               await AsyncStorage.multiRemove(['energo_token', 'energo_user']);
-              console.log('Local storage cleared');
+              console.log('AsyncStorage cleared successfully');
               
-              // Reset user state
+              // Reset user state  
               setUser(null);
+              console.log('User state reset to null');
               
-              // Navigate to login screen
               console.log('Navigating to login screen...');
+              
+              // Navigate to home screen
               router.replace('/');
               
             } catch (error) {
