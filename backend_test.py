@@ -799,14 +799,28 @@ class EnergoBackendTester:
         
         # Test protected endpoints (only if we have auth)
         if self.auth_token:
+            print("\n🔹 Testing Existing Functionality...")
             self.test_dashboard_endpoint()
             self.test_ai_tips_endpoint()
+            self.test_ai_insights_endpoint()
             self.test_badges_endpoint()
             self.test_notifications_endpoint()
+            self.test_logout_endpoint()
+            
+            print("\n🔹 Testing Premium Features...")
+            self.test_subscription_endpoint()
+            self.test_settings_endpoint()
+            self.test_fluvius_data_endpoint()
+            
+            print("\n🔹 Testing Interactive AI Chat...")
+            self.test_ai_chat_endpoint()
+            self.test_ai_chat_history_endpoint()
+            self.test_ai_chat_with_various_messages()
         else:
             print("⚠️  Skipping protected endpoint tests - no authentication token")
             
         # Test security
+        print("\n🔹 Testing Security...")
         self.test_unauthorized_access()
         self.test_invalid_token_access()
         
