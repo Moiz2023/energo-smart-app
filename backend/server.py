@@ -14,6 +14,9 @@ import uuid
 import random
 import math
 from pathlib import Path
+import aiohttp
+import asyncio
+from emergentintegrations.llm.chat import LlmChat, UserMessage
 
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
