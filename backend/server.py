@@ -1338,7 +1338,7 @@ async def get_chat_history(session_id: Optional[str] = None, user_id: str = Depe
             query["session_id"] = session_id
             
         chat_history = list(await db.chat_history.find(
-            query
+            query, {"_id": 0}  # Exclude MongoDB _id field
         ).sort("timestamp", -1).limit(50).to_list(length=50))
         
         return {"chat_history": chat_history}
