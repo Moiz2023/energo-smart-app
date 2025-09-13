@@ -339,6 +339,406 @@ class EnergoBackendTester:
             
         return False
 
+    def test_ai_insights_endpoint(self):
+        """Test AI insights endpoint"""
+        print("\n🧠 Testing AI Insights Endpoint...")
+        
+        if not self.auth_token:
+            self.log_result("AI Insights Access", False, "No auth token available")
+            return False
+            
+        try:
+            headers = {
+                "Authorization": f"Bearer {self.auth_token}",
+                "Content-Type": "application/json"
+            }
+            
+            response = self.session.get(
+                f"{self.base_url}/ai-insights",
+                headers=headers,
+                timeout=30
+            )
+            
+            if response.status_code == 200:
+                data = response.json()
+                
+                required_fields = ["insights", "patterns", "subsidies", "region"]
+                missing_fields = [field for field in required_fields if field not in data]
+                
+                if not missing_fields:
+                    # Check insights structure
+                    if isinstance(data["insights"], list) and len(data["insights"]) > 0:
+                        insight = data["insights"][0]
+                        insight_fields = ["id", "title", "content", "category", "potential_savings"]
+                        
+                        if all(field in insight for field in insight_fields):
+                            self.log_result("AI Insights Structure", True, f"Received {len(data['insights'])} insights with correct structure")
+                            return True
+                        else:
+                            self.log_result("AI Insights Structure", False, f"Missing insight fields: {[f for f in insight_fields if f not in insight]}")
+                    else:
+                        self.log_result("AI Insights Data", False, "No insights in response or invalid format")
+                else:
+                    self.log_result("AI Insights Structure", False, f"Missing fields: {missing_fields}")
+            else:
+                self.log_result("AI Insights Access", False, f"Status: {response.status_code}, Response: {response.text}")
+                
+        except Exception as e:
+            self.log_result("AI Insights Access", False, f"Exception: {str(e)}")
+            
+        return False
+
+    def test_ai_chat_endpoint(self):
+        """Test interactive AI chat endpoint"""
+        print("\n💬 Testing AI Chat Endpoint...")
+        
+        if not self.auth_token:
+            self.log_result("AI Chat Access", False, "No auth token available")
+            return False
+            
+        try:
+            headers = {
+                "Authorization": f"Bearer {self.auth_token}",
+                "Content-Type": "application/json"
+            }
+            
+            # Test basic chat message
+            chat_data = {
+                "message": "How can I reduce my energy consumption?",
+                "session_id": None
+            }
+            
+            response = self.session.post(
+                f"{self.base_url}/ai-chat",
+                json=chat_data,
+                headers=headers,
+                timeout=45  # AI responses may take longer
+            )
+            
+            if response.status_code == 200:
+                data = response.json()
+                
+                required_fields = ["response", "session_id", "timestamp"]
+                if all(field in data for field in required_fields):
+                    if data["response"] and len(data["response"]) > 10:  # Meaningful response
+                        self.log_result("AI Chat Basic Response", True, f"Received response with session_id: {data['session_id'][:8]}...")
+                        
+                        # Test follow-up message with session_id
+                        follow_up_data = {
+                            "message": "What about solar panels?",
+                            "session_id": data["session_id"]
+                        }
+                        
+                        follow_up_response = self.session.post(
+                            f"{self.base_url}/ai-chat",
+                            json=follow_up_data,
+                            headers=headers,
+                            timeout=45
+                        )
+                        
+                        if follow_up_response.status_code == 200:
+                            follow_up_data_resp = follow_up_response.json()
+                            if follow_up_data_resp["session_id"] == data["session_id"]:
+                                self.log_result("AI Chat Session Continuity", True, "Session ID maintained across messages")
+                                return True
+                            else:
+                                self.log_result("AI Chat Session Continuity", False, "Session ID not maintained")
+                        else:
+                            self.log_result("AI Chat Follow-up", False, f"Follow-up failed: {follow_up_response.status_code}")
+                    else:
+                        self.log_result("AI Chat Response Quality", False, "Response too short or empty")
+                else:
+                    self.log_result("AI Chat Structure", False, f"Missing fields: {[f for f in required_fields if f not in data]}")
+            else:
+                self.log_result("AI Chat Access", False, f"Status: {response.status_code}, Response: {response.text}")
+                
+        except Exception as e:
+            self.log_result("AI Chat Access", False, f"Exception: {str(e)}")
+            
+        return False
+
+    def test_ai_chat_history_endpoint(self):
+        """Test AI chat history endpoint"""
+        print("\n📜 Testing AI Chat History Endpoint...")
+        
+        if not self.auth_token:
+            self.log_result("AI Chat History Access", False, "No auth token available")
+            return False
+            
+        try:
+            headers = {
+                "Authorization": f"Bearer {self.auth_token}",
+                "Content-Type": "application/json"
+            }
+            
+            response = self.session.get(
+                f"{self.base_url}/ai-chat/history",
+                headers=headers,
+                timeout=30
+            )
+            
+            if response.status_code == 200:
+                data = response.json()
+                
+                if "chat_history" in data and isinstance(data["chat_history"], list):
+                    if len(data["chat_history"]) > 0:
+                        # Check history structure
+                        history_item = data["chat_history"][0]
+                        required_fields = ["id", "message", "response", "timestamp", "session_id"]
+                        
+                        if all(field in history_item for field in required_fields):
+                            self.log_result("AI Chat History Structure", True, f"Retrieved {len(data['chat_history'])} chat history items")
+                            return True
+                        else:
+                            self.log_result("AI Chat History Structure", False, f"Missing fields: {[f for f in required_fields if f not in history_item]}")
+                    else:
+                        self.log_result("AI Chat History Data", True, "No chat history (empty list is valid)")
+                        return True
+                else:
+                    self.log_result("AI Chat History Data", False, "No chat_history field in response")
+            else:
+                self.log_result("AI Chat History Access", False, f"Status: {response.status_code}, Response: {response.text}")
+                
+        except Exception as e:
+            self.log_result("AI Chat History Access", False, f"Exception: {str(e)}")
+            
+        return False
+
+    def test_subscription_endpoint(self):
+        """Test subscription endpoint"""
+        print("\n💳 Testing Subscription Endpoint...")
+        
+        if not self.auth_token:
+            self.log_result("Subscription Access", False, "No auth token available")
+            return False
+            
+        try:
+            headers = {
+                "Authorization": f"Bearer {self.auth_token}",
+                "Content-Type": "application/json"
+            }
+            
+            response = self.session.get(
+                f"{self.base_url}/subscription",
+                headers=headers,
+                timeout=30
+            )
+            
+            if response.status_code == 200:
+                data = response.json()
+                
+                required_fields = ["current_plan", "plans"]
+                if all(field in data for field in required_fields):
+                    # Check if user has premium access as configured
+                    if data["current_plan"] == "premium":
+                        self.log_result("Premium Access Configuration", True, "User has premium access as configured")
+                        
+                        # Check plans structure
+                        if "free" in data["plans"] and "premium" in data["plans"]:
+                            premium_plan = data["plans"]["premium"]
+                            if "features" in premium_plan and isinstance(premium_plan["features"], list):
+                                self.log_result("Subscription Plans Structure", True, f"Premium plan has {len(premium_plan['features'])} features")
+                                return True
+                            else:
+                                self.log_result("Subscription Plans Structure", False, "Premium plan missing features")
+                        else:
+                            self.log_result("Subscription Plans Structure", False, "Missing free or premium plan")
+                    else:
+                        self.log_result("Premium Access Configuration", False, f"Expected premium, got {data['current_plan']}")
+                else:
+                    self.log_result("Subscription Structure", False, f"Missing fields: {[f for f in required_fields if f not in data]}")
+            else:
+                self.log_result("Subscription Access", False, f"Status: {response.status_code}, Response: {response.text}")
+                
+        except Exception as e:
+            self.log_result("Subscription Access", False, f"Exception: {str(e)}")
+            
+        return False
+
+    def test_settings_endpoint(self):
+        """Test settings endpoint"""
+        print("\n⚙️ Testing Settings Endpoint...")
+        
+        if not self.auth_token:
+            self.log_result("Settings Access", False, "No auth token available")
+            return False
+            
+        try:
+            headers = {
+                "Authorization": f"Bearer {self.auth_token}",
+                "Content-Type": "application/json"
+            }
+            
+            response = self.session.get(
+                f"{self.base_url}/settings",
+                headers=headers,
+                timeout=30
+            )
+            
+            if response.status_code == 200:
+                data = response.json()
+                
+                if "settings" in data:
+                    settings = data["settings"]
+                    required_settings = ["language", "currency_unit", "notifications_enabled", "subscription_plan", "region"]
+                    
+                    if all(field in settings for field in required_settings):
+                        # Check if premium settings are configured
+                        if settings["subscription_plan"] == "premium":
+                            self.log_result("Premium Settings Configuration", True, "Settings show premium subscription")
+                            return True
+                        else:
+                            self.log_result("Premium Settings Configuration", False, f"Expected premium subscription, got {settings['subscription_plan']}")
+                    else:
+                        self.log_result("Settings Structure", False, f"Missing settings: {[f for f in required_settings if f not in settings]}")
+                else:
+                    self.log_result("Settings Structure", False, "No settings field in response")
+            else:
+                self.log_result("Settings Access", False, f"Status: {response.status_code}, Response: {response.text}")
+                
+        except Exception as e:
+            self.log_result("Settings Access", False, f"Exception: {str(e)}")
+            
+        return False
+
+    def test_fluvius_data_endpoint(self):
+        """Test Fluvius data endpoint for premium users"""
+        print("\n🏭 Testing Fluvius Data Endpoint...")
+        
+        if not self.auth_token:
+            self.log_result("Fluvius Data Access", False, "No auth token available")
+            return False
+            
+        try:
+            headers = {
+                "Authorization": f"Bearer {self.auth_token}",
+                "Content-Type": "application/json"
+            }
+            
+            response = self.session.get(
+                f"{self.base_url}/fluvius-data",
+                headers=headers,
+                timeout=30
+            )
+            
+            if response.status_code == 200:
+                data = response.json()
+                
+                # Check if premium user gets real data access
+                required_fields = ["data_source", "location", "data"]
+                if all(field in data for field in required_fields):
+                    if isinstance(data["data"], list) and len(data["data"]) > 0:
+                        data_item = data["data"][0]
+                        data_fields = ["municipality", "period"]
+                        
+                        if all(field in data_item for field in data_fields):
+                            self.log_result("Fluvius Data Structure", True, f"Retrieved {len(data['data'])} data points from {data['data_source']}")
+                            return True
+                        else:
+                            self.log_result("Fluvius Data Structure", False, f"Missing data fields: {[f for f in data_fields if f not in data_item]}")
+                    else:
+                        self.log_result("Fluvius Data Content", False, "No data items in response")
+                else:
+                    self.log_result("Fluvius Data Structure", False, f"Missing fields: {[f for f in required_fields if f not in data]}")
+            else:
+                self.log_result("Fluvius Data Access", False, f"Status: {response.status_code}, Response: {response.text}")
+                
+        except Exception as e:
+            self.log_result("Fluvius Data Access", False, f"Exception: {str(e)}")
+            
+        return False
+
+    def test_logout_endpoint(self):
+        """Test logout endpoint"""
+        print("\n🚪 Testing Logout Endpoint...")
+        
+        if not self.auth_token:
+            self.log_result("Logout Access", False, "No auth token available")
+            return False
+            
+        try:
+            headers = {
+                "Authorization": f"Bearer {self.auth_token}",
+                "Content-Type": "application/json"
+            }
+            
+            response = self.session.post(
+                f"{self.base_url}/auth/logout",
+                headers=headers,
+                timeout=30
+            )
+            
+            if response.status_code == 200:
+                data = response.json()
+                if "message" in data:
+                    self.log_result("Logout Functionality", True, "Logout successful")
+                    return True
+                else:
+                    self.log_result("Logout Functionality", False, "No message in logout response")
+            else:
+                self.log_result("Logout Access", False, f"Status: {response.status_code}, Response: {response.text}")
+                
+        except Exception as e:
+            self.log_result("Logout Access", False, f"Exception: {str(e)}")
+            
+        return False
+
+    def test_ai_chat_with_various_messages(self):
+        """Test AI chat with various message types"""
+        print("\n🗨️ Testing AI Chat with Various Message Types...")
+        
+        if not self.auth_token:
+            self.log_result("AI Chat Variety Test", False, "No auth token available")
+            return False
+            
+        test_messages = [
+            "What are the best energy saving tips for winter?",
+            "Tell me about solar panel subsidies in Brussels",
+            "How much can I save with better insulation?",
+            "What's my current energy consumption pattern?",
+            "Are there any new energy regulations in Belgium?"
+        ]
+        
+        headers = {
+            "Authorization": f"Bearer {self.auth_token}",
+            "Content-Type": "application/json"
+        }
+        
+        successful_responses = 0
+        
+        for i, message in enumerate(test_messages):
+            try:
+                chat_data = {
+                    "message": message,
+                    "session_id": None
+                }
+                
+                response = self.session.post(
+                    f"{self.base_url}/ai-chat",
+                    json=chat_data,
+                    headers=headers,
+                    timeout=45
+                )
+                
+                if response.status_code == 200:
+                    data = response.json()
+                    if data.get("response") and len(data["response"]) > 20:
+                        successful_responses += 1
+                        
+                # Small delay between requests
+                time.sleep(1)
+                
+            except Exception as e:
+                print(f"  Message {i+1} failed: {str(e)}")
+        
+        if successful_responses >= len(test_messages) * 0.8:  # 80% success rate
+            self.log_result("AI Chat Message Variety", True, f"{successful_responses}/{len(test_messages)} message types handled successfully")
+            return True
+        else:
+            self.log_result("AI Chat Message Variety", False, f"Only {successful_responses}/{len(test_messages)} message types handled successfully")
+            
+        return False
+
     def test_unauthorized_access(self):
         """Test accessing protected endpoints without authentication"""
         print("\n🔒 Testing Unauthorized Access...")
