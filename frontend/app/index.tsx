@@ -158,7 +158,7 @@ export default function Index() {
       }
     } catch (error) {
       console.error('Auth error:', error);
-      if (error.name === 'AbortError' || error.message.includes('timeout')) {
+      if ((error as any).name === 'AbortError' || (error as any).message?.includes?.('timeout')) {
         setLoginError('Connection timeout. Please check your internet and try again.');
       } else {
         setLoginError('Network error. Please check your connection and try again.');
