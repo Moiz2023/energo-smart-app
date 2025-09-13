@@ -207,8 +207,8 @@ class EnergoBackendTester:
         return False
 
     def test_ai_tips_endpoint(self):
-        """Test AI tips endpoint"""
-        print("\n💡 Testing AI Tips Endpoint...")
+        """Test AI insights endpoint (legacy ai-tips test)"""
+        print("\n💡 Testing AI Insights Endpoint (Legacy AI Tips)...")
         
         if not self.auth_token:
             self.log_result("AI Tips Access", False, "No auth token available")
@@ -221,7 +221,7 @@ class EnergoBackendTester:
             }
             
             response = self.session.get(
-                f"{self.base_url}/ai-tips",
+                f"{self.base_url}/ai-insights",
                 headers=headers,
                 timeout=30
             )
@@ -229,18 +229,18 @@ class EnergoBackendTester:
             if response.status_code == 200:
                 data = response.json()
                 
-                if "tips" in data and isinstance(data["tips"], list) and len(data["tips"]) > 0:
-                    # Check tip structure
-                    tip = data["tips"][0]
+                if "insights" in data and isinstance(data["insights"], list) and len(data["insights"]) > 0:
+                    # Check insight structure
+                    insight = data["insights"][0]
                     required_tip_fields = ["id", "title", "content", "category", "potential_savings"]
                     
-                    if all(field in tip for field in required_tip_fields):
-                        self.log_result("AI Tips Structure", True, f"Received {len(data['tips'])} tips with correct structure")
+                    if all(field in insight for field in required_tip_fields):
+                        self.log_result("AI Tips Structure", True, f"Received {len(data['insights'])} insights with correct structure")
                         return True
                     else:
-                        self.log_result("AI Tips Structure", False, f"Missing tip fields: {[f for f in required_tip_fields if f not in tip]}")
+                        self.log_result("AI Tips Structure", False, f"Missing insight fields: {[f for f in required_tip_fields if f not in insight]}")
                 else:
-                    self.log_result("AI Tips Data", False, "No tips in response or invalid format")
+                    self.log_result("AI Tips Data", False, "No insights in response or invalid format")
             else:
                 self.log_result("AI Tips Access", False, f"Status: {response.status_code}, Response: {response.text}")
                 
