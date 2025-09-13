@@ -1292,6 +1292,75 @@ async def search_real_time_info(query: str, region: str) -> str:
         logger.error(f"Real-time search error: {e}")
         return ""
 
+async def get_fluvius_data(user_location: str = "Brussels") -> Dict:
+    """
+    Integrate with Fluvius Open Data API for realistic energy consumption data.
+    Fallback to mock data if API is unavailable or user is outside Belgium.
+    """
+    try:
+        # Fluvius Open Data API endpoint
+        fluvius_api_url = "https://opendata.fluvius.be/api/explore/v2.1/catalog/datasets/consumption-electricity-municipality/records"
+        
+        async with aiohttp.ClientSession() as session:
+            params = {
+                "limit": 10,
+                "where": f"municipality like '{user_location}%'",
+                "order_by": "period desc"
+            }
+            
+            async with session.get(fluvius_api_url, params=params, timeout=10) as response:
+                if response.status == 200:
+                    data = await response.json()
+                    
+                    if data.get('results'):
+                        # Process Fluvius data
+                        fluvius_results = []
+                        for record in data['results'][:5]:
+                            fields = record.get('record', {}).get('fields', {})
+                            fluvius_results.append({
+                                'municipality': fields.get('municipality', user_location),
+                                'period': fields.get('period', '2024'),
+                                'consumption_mwh': fields.get('consumption_mwh', 0),
+                                'connections': fields.get('connections', 0),
+                                'source': 'Fluvius Open Data'
+                            })
+                        
+                        return {
+                            'data_source': 'Fluvius Open Data API',
+                            'location': user_location,
+                            'data': fluvius_results,
+                            'is_real_data': True
+                        }
+                
+        # If no data from Fluvius, return mock data
+        raise Exception("No Fluvius data available")
+        
+    except Exception as e:
+        logger.warning(f"Fluvius API unavailable: {e}. Using mock data.")
+        
+        # Generate realistic mock data
+        mock_data = []
+        base_consumption = random.uniform(3500, 4500)  # Annual kWh for average household
+        
+        for i in range(5):
+            month_factor = 1 + (0.3 * math.sin(2 * math.pi * i / 12))  # Seasonal variation
+            daily_consumption = (base_consumption / 365) * month_factor
+            
+            mock_data.append({
+                'municipality': user_location,
+                'period': f'2024-{12-i:02d}',
+                'consumption_kwh': round(daily_consumption * 30, 2),  # Monthly consumption
+                'connections': random.randint(45000, 55000),
+                'source': 'Simulated Data'
+            })
+        
+        return {
+            'data_source': 'Mock Data (Fluvius API unavailable)',
+            'location': user_location,
+            'data': mock_data,
+            'is_real_data': False
+        }
+
 # Get chat history endpoint
 @api_router.get("/ai-chat/history")
 async def get_chat_history(session_id: Optional[str] = None, user_id: str = Depends(get_current_user)):
