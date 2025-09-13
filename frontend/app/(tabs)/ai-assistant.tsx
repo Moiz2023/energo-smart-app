@@ -198,7 +198,7 @@ export default function AIAssistant() {
         return;
       }
 
-      const response = await fetch(`${BACKEND_URL}/api/ai-chat`, {
+      const response = await fetch(`${BACKEND_URL}/ai-chat`, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${token}`,
