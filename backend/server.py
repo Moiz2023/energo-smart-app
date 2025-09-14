@@ -1396,6 +1396,16 @@ async def get_fluvius_energy_data(user_id: str = Depends(get_current_user)):
         logger.error(f"Fluvius data error: {e}")
         raise HTTPException(status_code=500, detail="Failed to retrieve energy data")
 
+# Health check endpoint
+@api_router.get("/health")
+async def health_check():
+    return {"status": "healthy", "timestamp": datetime.utcnow()}
+
+# Property management test endpoint
+@api_router.get("/property-test")
+async def property_test():
+    return {"message": "Property management test endpoint", "enabled": PROPERTY_MANAGEMENT_ENABLED}
+
 # Include router
 app.include_router(api_router)
 
