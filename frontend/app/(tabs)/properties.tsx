@@ -298,15 +298,62 @@ export default function Properties() {
     }
   };
 
-  const resetDeviceForm = () => {
-    setDeviceForm({
+  const createProperty = async () => {
+    try {
+      if (!propertyForm.name || !propertyForm.address || !propertyForm.city) {
+        Alert.alert('Error', 'Please fill in all required fields (Name, Address, City)');
+        return;
+      }
+
+      const token = await AsyncStorage.getItem('energo_token');
+      if (!token) return;
+
+      const propertyData = {
+        name: propertyForm.name,
+        property_type: propertyForm.property_type,
+        address: propertyForm.address,
+        city: propertyForm.city,
+        postal_code: propertyForm.postal_code,
+        region: propertyForm.region,
+        square_meters: propertyForm.square_meters ? parseInt(propertyForm.square_meters) : undefined,
+        occupants: propertyForm.occupants ? parseInt(propertyForm.occupants) : undefined,
+        meter_id: `METER_${Date.now()}`,
+        api_provider: null,
+      };
+
+      const response = await fetch(`${BACKEND_URL}/properties`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(propertyData),
+      });
+
+      if (response.ok) {
+        Alert.alert('Success', 'Property created successfully!');
+        setShowPropertyModal(false);
+        resetPropertyForm();
+        loadProperties();
+      } else {
+        Alert.alert('Error', 'Failed to create property. Please try again.');
+      }
+    } catch (error) {
+      console.error('Error creating property:', error);
+      Alert.alert('Error', 'Network error. Please try again.');
+    }
+  };
+
+  const resetPropertyForm = () => {
+    setPropertyForm({
       name: '',
-      device_type: '',
-      category: '',
-      estimated_wattage: '',
-      daily_runtime_hours: '',
-      brand: '',
-      model: '',
+      property_type: 'home',
+      address: '',
+      city: '',
+      postal_code: '',
+      region: 'brussels',
+      square_meters: '',
+      occupants: '',
     });
   };
 
