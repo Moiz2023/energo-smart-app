@@ -1439,10 +1439,11 @@ async def get_property_management_status():
 @api_router.get("/device-templates")
 async def get_device_templates():
     """Get all device templates for quick-add functionality"""
-    if not PROPERTY_MANAGEMENT_ENABLED:
-        raise HTTPException(status_code=503, detail="Property management features not available")
-    
     try:
+        if not PROPERTY_MANAGEMENT_ENABLED:
+            return {"common_devices": [], "message": "Property management features not available"}
+        
+        from device_templates import get_common_devices, get_devices_by_category, DEVICE_TEMPLATES, DeviceCategory
         common_devices = get_common_devices()
         templates_by_category = {}
         
@@ -1455,15 +1456,16 @@ async def get_device_templates():
             "all_templates": list(DEVICE_TEMPLATES.values())
         }
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to fetch device templates: {str(e)}")
+        return {"common_devices": [], "error": str(e)}
 
 @api_router.get("/usage-scenarios")
 async def get_usage_scenarios():
     """Get all available usage scenarios for demo/testing"""
-    if not PROPERTY_MANAGEMENT_ENABLED:
-        raise HTTPException(status_code=503, detail="Property management features not available")
-    
     try:
+        if not PROPERTY_MANAGEMENT_ENABLED:
+            return {"scenarios": {}, "message": "Property management features not available"}
+        
+        from device_templates import USAGE_SCENARIOS
         scenarios = {}
         for scenario, template in USAGE_SCENARIOS.items():
             scenarios[scenario.value] = {
@@ -1476,7 +1478,7 @@ async def get_usage_scenarios():
         
         return {"scenarios": scenarios}
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to fetch scenarios: {str(e)}")
+        return {"scenarios": {}, "error": str(e)}
 
 @api_router.post("/properties", response_model=Property)
 async def create_property(property_data: PropertyCreate, user_id: str = Depends(get_current_user)):
