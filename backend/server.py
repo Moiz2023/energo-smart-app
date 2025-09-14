@@ -18,6 +18,20 @@ import aiohttp
 import asyncio
 from emergentintegrations.llm.chat import LlmChat, UserMessage
 
+# Import our new models and utilities
+try:
+    from models import *
+    from device_templates import *
+    from consumption_engine import ConsumptionAnalysisEngine, MockDataGenerator
+    
+    # Initialize engines
+    consumption_engine = ConsumptionAnalysisEngine()
+    mock_generator = MockDataGenerator()
+    PROPERTY_MANAGEMENT_ENABLED = True
+except ImportError as e:
+    print(f"Property management features not available: {e}")
+    PROPERTY_MANAGEMENT_ENABLED = False
+
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
 
