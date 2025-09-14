@@ -1525,7 +1525,13 @@ if PROPERTY_MANAGEMENT_ENABLED:
     # DEVICE MANAGEMENT ENDPOINTS
     # ============================================================================
 
-    @api_router.get("/device-templates")
+    @api_router.get("/property-management-status")
+    async def get_property_management_status():
+        """Test endpoint to check if property management is enabled"""
+        return {
+            "enabled": PROPERTY_MANAGEMENT_ENABLED,
+            "message": "Property management features are active"
+        }
     async def get_device_templates():
         """Get all device templates for quick-add functionality"""
         try:
