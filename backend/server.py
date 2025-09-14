@@ -1418,9 +1418,7 @@ async def simple_scenarios():
         }
     }
 
-# Include router
-app.include_router(api_router)
-
+# CORS middleware
 app.add_middleware(
     CORSMiddleware,
     allow_credentials=True,
