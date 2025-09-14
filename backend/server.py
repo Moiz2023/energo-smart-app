@@ -1406,6 +1406,18 @@ async def health_check():
 async def property_test():
     return {"message": "Property management test endpoint", "enabled": PROPERTY_MANAGEMENT_ENABLED}
 
+@api_router.get("/simple-scenarios")
+async def simple_scenarios():
+    """Simple test endpoint for scenarios"""
+    return {
+        "scenarios": {
+            "family_home": {
+                "name": "Family Home (4 people)",
+                "description": "Typical Belgian family with 4 people, standard appliances and electronics"
+            }
+        }
+    }
+
 # Include router
 app.include_router(api_router)
 
