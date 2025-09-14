@@ -1536,7 +1536,63 @@ async def get_user_properties(user_id: str = Depends(get_current_user)):
         raise HTTPException(status_code=500, detail=f"Failed to fetch properties: {str(e)}")
 
 # Continue with the rest of the endpoints...
-@api_router.post("/setup-scenario/{scenario}")
+@api_router.post("/properties/{property_id}/devices")
+async def create_device(property_id: str, device_data: dict, user_id: str = Depends(get_current_user)):
+    """Create a new device for a property"""
+    try:
+        if not PROPERTY_MANAGEMENT_ENABLED:
+            raise HTTPException(status_code=503, detail="Property management features not available")
+        
+        # Verify property belongs to user
+        property_doc = await db.properties.find_one(
+            {"id": property_id, "user_id": user_id, "active": True}
+        )
+        
+        if not property_doc:
+            raise HTTPException(status_code=404, detail="Property not found")
+        
+        device_dict = device_data.copy()
+        device_dict["property_id"] = property_id
+        device_dict["user_id"] = user_id
+        device_dict["id"] = str(uuid.uuid4())
+        device_dict["created_at"] = datetime.utcnow()
+        device_dict["updated_at"] = datetime.utcnow()
+        device_dict["active"] = True
+        
+        await db.devices.insert_one(device_dict)
+        
+        return device_dict
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to create device: {str(e)}")
+
+@api_router.get("/properties/{property_id}/devices")
+async def get_property_devices(property_id: str, user_id: str = Depends(get_current_user)):
+    """Get all devices for a property"""
+    try:
+        if not PROPERTY_MANAGEMENT_ENABLED:
+            return []
+        
+        # Verify property belongs to user
+        property_doc = await db.properties.find_one(
+            {"id": property_id, "user_id": user_id, "active": True}
+        )
+        
+        if not property_doc:
+            raise HTTPException(status_code=404, detail="Property not found")
+        
+        devices = list(await db.devices.find(
+            {"property_id": property_id, "user_id": user_id, "active": True}
+        ).sort("created_at", -1).to_list(length=1000))
+        
+        return devices
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to fetch devices: {str(e)}")
 async def setup_usage_scenario(scenario: str, user_id: str = Depends(get_current_user)):
     """Set up a complete usage scenario (property + devices + mock data)"""
     if not PROPERTY_MANAGEMENT_ENABLED:
