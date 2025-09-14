@@ -19,6 +19,9 @@ import asyncio
 from emergentintegrations.llm.chat import LlmChat, UserMessage
 
 # Import our new models and utilities
+import sys
+sys.path.append('/app/backend')
+
 try:
     from models import *
     from device_templates import *
@@ -28,8 +31,9 @@ try:
     consumption_engine = ConsumptionAnalysisEngine()
     mock_generator = MockDataGenerator()
     PROPERTY_MANAGEMENT_ENABLED = True
+    print("✅ Property management features loaded successfully")
 except ImportError as e:
-    print(f"Property management features not available: {e}")
+    print(f"❌ Property management features not available: {e}")
     PROPERTY_MANAGEMENT_ENABLED = False
 
 ROOT_DIR = Path(__file__).parent
