@@ -1490,37 +1490,48 @@ async def get_usage_scenarios():
     except Exception as e:
         return {"scenarios": {}, "error": str(e)}
 
-@api_router.post("/properties", response_model=Property)
-async def create_property(property_data: PropertyCreate, user_id: str = Depends(get_current_user)):
+@api_router.post("/properties")
+async def create_property(property_data: dict, user_id: str = Depends(get_current_user)):
     """Create a new property for the user"""
-    if not PROPERTY_MANAGEMENT_ENABLED:
-        raise HTTPException(status_code=503, detail="Property management features not available")
-    
     try:
-        property_dict = property_data.dict()
+        if not PROPERTY_MANAGEMENT_ENABLED:
+            raise HTTPException(status_code=503, detail="Property management features not available")
+        
+        property_dict = property_data.copy()
         property_dict["user_id"] = user_id
         property_dict["id"] = str(uuid.uuid4())
         property_dict["created_at"] = datetime.utcnow()
         property_dict["updated_at"] = datetime.utcnow()
+        property_dict["active"] = True
+        
+        # Set default tariff if not provided
+        if "tariff" not in property_dict:
+            property_dict["tariff"] = {
+                "tariff_type": "single",
+                "single_rate": 0.25,
+                "fixed_monthly_cost": 45.0,
+                "grid_cost": 0.05,
+                "taxes_percentage": 21.0
+            }
         
         await db.properties.insert_one(property_dict)
         
-        return Property(**property_dict)
+        return property_dict
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to create property: {str(e)}")
 
-@api_router.get("/properties", response_model=List[Property])
+@api_router.get("/properties")
 async def get_user_properties(user_id: str = Depends(get_current_user)):
     """Get all properties for the current user"""
-    if not PROPERTY_MANAGEMENT_ENABLED:
-        raise HTTPException(status_code=503, detail="Property management features not available")
-    
     try:
+        if not PROPERTY_MANAGEMENT_ENABLED:
+            return []
+        
         properties = list(await db.properties.find(
             {"user_id": user_id, "active": True}
         ).sort("created_at", -1).to_list(length=100))
         
-        return [Property(**prop) for prop in properties]
+        return properties
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to fetch properties: {str(e)}")
 
