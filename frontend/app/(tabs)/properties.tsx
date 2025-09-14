@@ -345,15 +345,159 @@ export default function Properties() {
   };
 
   const resetPropertyForm = () => {
-    setPropertyForm({
+
+  const resetDeviceForm = () => {
+    setDeviceForm({
       name: '',
+      device_type: '',
+      category: '',
+      estimated_wattage: '',
+      daily_runtime_hours: '',
+      brand: '',
+      model: '',
+    });
+  };
+    setPropertyForm({
+
+  const resetDeviceForm = () => {
+    setDeviceForm({
+      name: '',
+      device_type: '',
+      category: '',
+      estimated_wattage: '',
+      daily_runtime_hours: '',
+      brand: '',
+      model: '',
+    });
+  };
+      name: '',
+
+  const resetDeviceForm = () => {
+    setDeviceForm({
+      name: '',
+      device_type: '',
+      category: '',
+      estimated_wattage: '',
+      daily_runtime_hours: '',
+      brand: '',
+      model: '',
+    });
+  };
       property_type: 'home',
+
+  const resetDeviceForm = () => {
+    setDeviceForm({
+      name: '',
+      device_type: '',
+      category: '',
+      estimated_wattage: '',
+      daily_runtime_hours: '',
+      brand: '',
+      model: '',
+    });
+  };
       address: '',
+
+  const resetDeviceForm = () => {
+    setDeviceForm({
+      name: '',
+      device_type: '',
+      category: '',
+      estimated_wattage: '',
+      daily_runtime_hours: '',
+      brand: '',
+      model: '',
+    });
+  };
       city: '',
+
+  const resetDeviceForm = () => {
+    setDeviceForm({
+      name: '',
+      device_type: '',
+      category: '',
+      estimated_wattage: '',
+      daily_runtime_hours: '',
+      brand: '',
+      model: '',
+    });
+  };
       postal_code: '',
+
+  const resetDeviceForm = () => {
+    setDeviceForm({
+      name: '',
+      device_type: '',
+      category: '',
+      estimated_wattage: '',
+      daily_runtime_hours: '',
+      brand: '',
+      model: '',
+    });
+  };
       region: 'brussels',
+
+  const resetDeviceForm = () => {
+    setDeviceForm({
+      name: '',
+      device_type: '',
+      category: '',
+      estimated_wattage: '',
+      daily_runtime_hours: '',
+      brand: '',
+      model: '',
+    });
+  };
       square_meters: '',
+
+  const resetDeviceForm = () => {
+    setDeviceForm({
+      name: '',
+      device_type: '',
+      category: '',
+      estimated_wattage: '',
+      daily_runtime_hours: '',
+      brand: '',
+      model: '',
+    });
+  };
       occupants: '',
+
+  const resetDeviceForm = () => {
+    setDeviceForm({
+      name: '',
+      device_type: '',
+      category: '',
+      estimated_wattage: '',
+      daily_runtime_hours: '',
+      brand: '',
+      model: '',
+    });
+  };
+    });
+
+  const resetDeviceForm = () => {
+    setDeviceForm({
+      name: '',
+      device_type: '',
+      category: '',
+      estimated_wattage: '',
+      daily_runtime_hours: '',
+      brand: '',
+      model: '',
+    });
+  };
+  };
+
+  const resetDeviceForm = () => {
+    setDeviceForm({
+      name: '',
+      device_type: '',
+      category: '',
+      estimated_wattage: '',
+      daily_runtime_hours: '',
+      brand: '',
+      model: '',
     });
   };
 
