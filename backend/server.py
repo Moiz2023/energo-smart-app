@@ -1605,6 +1605,9 @@ async def startup_property_db():
     except Exception as e:
         print(f"❌ Property management database initialization error: {e}")
 
+# Include router after all endpoints are defined
+app.include_router(api_router)
+
 @app.on_event("shutdown")
 async def shutdown_db_client():
     client.close()
