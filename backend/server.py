@@ -1595,6 +1595,10 @@ async def get_property_devices(property_id: str, user_id: str = Depends(get_curr
             {"property_id": property_id, "user_id": user_id, "active": True}
         ).sort("created_at", -1).to_list(length=1000))
         
+        # Remove MongoDB _id fields
+        for device in devices:
+            device.pop("_id", None)
+        
         return devices
         
     except HTTPException:
