@@ -1593,6 +1593,379 @@ async def get_property_devices(property_id: str, user_id: str = Depends(get_curr
         raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to fetch devices: {str(e)}")
+@api_router.get("/properties/{property_id}")
+async def get_property_details(property_id: str, user_id: str = Depends(get_current_user)):
+    """Get detailed property information including devices and analysis"""
+    try:
+        if not PROPERTY_MANAGEMENT_ENABLED:
+            raise HTTPException(status_code=503, detail="Property management features not available")
+        
+        # Fetch property
+        property_doc = await db.properties.find_one({"id": property_id, "user_id": user_id, "active": True})
+        if not property_doc:
+            raise HTTPException(status_code=404, detail="Property not found")
+        
+        property_doc.pop("_id", None)
+        
+        # Fetch devices for this property
+        devices = []
+        async for device_doc in db.devices.find({"property_id": property_id, "user_id": user_id, "active": True}):
+            device_doc.pop("_id", None)
+            devices.append(device_doc)
+        
+        # Fetch recent meter readings
+        recent_readings = []
+        seven_days_ago = datetime.utcnow() - timedelta(days=7)
+        async for reading in db.meter_readings.find(
+            {"property_id": property_id, "timestamp": {"$gte": seven_days_ago}}
+        ).sort("timestamp", -1).limit(168):  # 1 week of hourly data
+            reading.pop("_id", None)
+            recent_readings.append(reading)
+        
+        # Calculate consumption estimates and alerts if we have devices and readings
+        device_estimates = []
+        alerts = []
+        discrepancies = []
+        
+        if devices:
+            try:
+                from models import Device, Property, MeterReading
+                from consumption_engine import ConsumptionAnalysisEngine
+                
+                # Convert to model objects
+                property_obj = Property(**property_doc)
+                device_objects = [Device(**device_data) for device_data in devices]
+                reading_objects = [MeterReading(**reading_data) for reading_data in recent_readings] if recent_readings else []
+                
+                engine = ConsumptionAnalysisEngine()
+                
+                # Calculate estimates
+                start_date = datetime.utcnow() - timedelta(days=1)
+                end_date = datetime.utcnow()
+                
+                for device_obj in device_objects:
+                    estimate = engine.calculate_device_consumption_estimate(
+                        device_obj, start_date, end_date, property_obj
+                    )
+                    device_estimates.append(estimate.dict())
+                
+                # Analyze discrepancies if we have readings
+                if reading_objects:
+                    discrepancy_list = engine.analyze_consumption_discrepancy(
+                        property_id, device_objects, reading_objects, property_obj
+                    )
+                    discrepancies = [d.dict() for d in discrepancy_list]
+                    
+                    # Generate alerts
+                    from models import DeviceConsumptionEstimate
+                    estimate_objects = [DeviceConsumptionEstimate(**est) for est in device_estimates]
+                    alert_list = engine.generate_device_alerts(
+                        property_id, device_objects, estimate_objects, discrepancy_list
+                    )
+                    alerts = [a.dict() for a in alert_list]
+                
+            except Exception as e:
+                logger.warning(f"Error calculating property analytics: {e}")
+        
+        return {
+            "property": property_doc,
+            "devices": devices,
+            "device_estimates": device_estimates,
+            "recent_readings": recent_readings,
+            "alerts": alerts,
+            "discrepancies": discrepancies,
+            "summary": {
+                "total_devices": len(devices),
+                "total_readings": len(recent_readings),
+                "has_mock_data": len(recent_readings) > 0
+            }
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error fetching property details: {e}")
+        raise HTTPException(status_code=500, detail="Failed to fetch property details")
+
+@api_router.put("/properties/{property_id}/devices/{device_id}")
+async def update_device(
+    property_id: str,
+    device_id: str,
+    device_updates: dict,
+    user_id: str = Depends(get_current_user)
+):
+    """Update a device"""
+    try:
+        if not PROPERTY_MANAGEMENT_ENABLED:
+            raise HTTPException(status_code=503, detail="Property management features not available")
+        
+        # Verify device exists and belongs to user
+        device_doc = await db.devices.find_one({
+            "id": device_id, 
+            "property_id": property_id, 
+            "user_id": user_id,
+            "active": True
+        })
+        if not device_doc:
+            raise HTTPException(status_code=404, detail="Device not found")
+        
+        # Update device
+        device_updates["updated_at"] = datetime.utcnow()
+        await db.devices.update_one(
+            {"id": device_id, "property_id": property_id, "user_id": user_id},
+            {"$set": device_updates}
+        )
+        
+        # Fetch updated device
+        updated_device = await db.devices.find_one({
+            "id": device_id, 
+            "property_id": property_id, 
+            "user_id": user_id
+        })
+        updated_device.pop("_id", None)
+        
+        return {"device": updated_device, "message": "Device updated successfully"}
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error updating device: {e}")
+        raise HTTPException(status_code=500, detail="Failed to update device")
+
+@api_router.delete("/properties/{property_id}/devices/{device_id}")
+async def delete_device(
+    property_id: str,
+    device_id: str,
+    user_id: str = Depends(get_current_user)
+):
+    """Delete a device (soft delete)"""
+    try:
+        if not PROPERTY_MANAGEMENT_ENABLED:
+            raise HTTPException(status_code=503, detail="Property management features not available")
+        
+        # Verify device exists and belongs to user
+        device_doc = await db.devices.find_one({
+            "id": device_id, 
+            "property_id": property_id, 
+            "user_id": user_id,
+            "active": True
+        })
+        if not device_doc:
+            raise HTTPException(status_code=404, detail="Device not found")
+        
+        # Soft delete device
+        await db.devices.update_one(
+            {"id": device_id, "property_id": property_id, "user_id": user_id},
+            {"$set": {"active": False, "updated_at": datetime.utcnow()}}
+        )
+        
+        return {"message": "Device deleted successfully"}
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error deleting device: {e}")
+        raise HTTPException(status_code=500, detail="Failed to delete device")
+
+@api_router.post("/properties/{property_id}/setup-scenario")
+async def setup_property_scenario(
+    property_id: str,
+    scenario_data: dict,
+    user_id: str = Depends(get_current_user)
+):
+    """Set up a property with a predefined scenario (for demo/testing)"""
+    try:
+        if not PROPERTY_MANAGEMENT_ENABLED:
+            raise HTTPException(status_code=503, detail="Property management features not available")
+        
+        # Verify property exists and belongs to user
+        property_doc = await db.properties.find_one({"id": property_id, "user_id": user_id, "active": True})
+        if not property_doc:
+            raise HTTPException(status_code=404, detail="Property not found")
+        
+        scenario_key = scenario_data.get("scenario")
+        if not scenario_key:
+            raise HTTPException(status_code=400, detail="Scenario key is required")
+        
+        from device_templates import USAGE_SCENARIOS
+        from models import UsageScenario, Device
+        
+        try:
+            scenario_enum = UsageScenario(scenario_key)
+        except ValueError:
+            raise HTTPException(status_code=400, detail="Invalid scenario key")
+        
+        scenario_template = USAGE_SCENARIOS.get(scenario_enum)
+        if not scenario_template:
+            raise HTTPException(status_code=404, detail="Scenario template not found")
+        
+        # Clear existing devices for this property
+        await db.devices.update_many(
+            {"property_id": property_id, "user_id": user_id},
+            {"$set": {"active": False, "updated_at": datetime.utcnow()}}
+        )
+        
+        # Create devices from scenario template
+        created_devices = []
+        for device_template in scenario_template.device_templates:
+            device_dict = device_template.dict()
+            device_dict["property_id"] = property_id
+            device_dict["user_id"] = user_id
+            device_dict["id"] = str(uuid.uuid4())
+            device_dict["created_at"] = datetime.utcnow()
+            device_dict["updated_at"] = datetime.utcnow()
+            device_dict["active"] = True
+            
+            await db.devices.insert_one(device_dict)
+            created_devices.append(device_dict)
+        
+        # Generate mock meter readings if requested
+        if scenario_data.get("generate_mock_data", True):
+            try:
+                from consumption_engine import MockDataGenerator
+                from models import Property, Device, MeterReadingSource
+                
+                property_obj = Property(**property_doc)
+                device_objects = [Device(**device_data) for device_data in created_devices]
+                
+                mock_generator = MockDataGenerator()
+                meter_readings = mock_generator.generate_meter_readings(
+                    property_id=property_id,
+                    user_id=user_id,
+                    meter_id=property_obj.meter_id or f"MOCK_{property_id}",
+                    devices=device_objects,
+                    property_details=property_obj,
+                    days=30,
+                    source=MeterReadingSource.SIMULATED
+                )
+                
+                # Clear existing readings for this property
+                await db.meter_readings.delete_many({"property_id": property_id})
+                
+                # Store meter readings
+                readings_to_insert = []
+                for reading in meter_readings:
+                    reading_dict = reading.dict()
+                    readings_to_insert.append(reading_dict)
+                
+                if readings_to_insert:
+                    await db.meter_readings.insert_many(readings_to_insert)
+                
+                logger.info(f"Generated {len(readings_to_insert)} mock meter readings for property {property_id}")
+                
+            except Exception as e:
+                logger.warning(f"Failed to generate mock data: {e}")
+        
+        return {
+            "message": f"Property set up with {scenario_template.name} scenario",
+            "devices_created": len(created_devices),
+            "scenario": {
+                "name": scenario_template.name,
+                "description": scenario_template.description,
+                "typical_monthly_kwh": scenario_template.typical_monthly_kwh,
+                "typical_monthly_cost": scenario_template.typical_monthly_cost
+            }
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error setting up scenario: {e}")
+        raise HTTPException(status_code=500, detail="Failed to set up property scenario")
+
+@api_router.post("/properties/{property_id}/upload-csv")
+async def upload_csv_meter_data(
+    property_id: str,
+    file_data: dict,
+    user_id: str = Depends(get_current_user)
+):
+    """Upload CSV meter data for a property"""
+    try:
+        if not PROPERTY_MANAGEMENT_ENABLED:
+            raise HTTPException(status_code=503, detail="Property management features not available")
+        
+        # Verify property exists and belongs to user
+        property_doc = await db.properties.find_one({"id": property_id, "user_id": user_id, "active": True})
+        if not property_doc:
+            raise HTTPException(status_code=404, detail="Property not found")
+        
+        # Parse CSV data
+        csv_content = file_data.get("csv_content", "")
+        data_format = file_data.get("data_format", "hourly")  # hourly, daily, monthly
+        
+        if not csv_content:
+            raise HTTPException(status_code=400, detail="CSV content is required")
+        
+        from models import MeterReading, MeterReadingSource
+        import csv
+        from io import StringIO
+        
+        # Parse CSV
+        csv_reader = csv.DictReader(StringIO(csv_content))
+        readings = []
+        
+        for row in csv_reader:
+            try:
+                # Expected columns: timestamp, consumption_kwh, production_kwh (optional)
+                timestamp_str = row.get("timestamp", "")
+                consumption_str = row.get("consumption_kwh", "0")
+                production_str = row.get("production_kwh", "0")
+                
+                if not timestamp_str or not consumption_str:
+                    continue
+                
+                # Parse timestamp (support multiple formats)
+                timestamp = None
+                for fmt in ["%Y-%m-%d %H:%M:%S", "%Y-%m-%dT%H:%M:%S", "%Y-%m-%d %H:%M", "%Y-%m-%d"]:
+                    try:
+                        timestamp = datetime.strptime(timestamp_str, fmt)
+                        break
+                    except ValueError:
+                        continue
+                
+                if not timestamp:
+                    continue
+                
+                consumption_kwh = float(consumption_str)
+                production_kwh = float(production_str) if production_str else 0.0
+                
+                reading = MeterReading(
+                    property_id=property_id,
+                    user_id=user_id,
+                    meter_id=property_doc.get("meter_id", f"CSV_{property_id}"),
+                    timestamp=timestamp,
+                    consumption_kwh=consumption_kwh,
+                    production_kwh=production_kwh,
+                    source=MeterReadingSource.CSV_UPLOAD
+                )
+                
+                readings.append(reading.dict())
+                
+            except Exception as e:
+                logger.warning(f"Error parsing CSV row: {row}, error: {e}")
+                continue
+        
+        if not readings:
+            raise HTTPException(status_code=400, detail="No valid readings found in CSV")
+        
+        # Clear existing readings for this property (to replace with CSV data)
+        await db.meter_readings.delete_many({"property_id": property_id})
+        
+        # Store readings
+        await db.meter_readings.insert_many(readings)
+        
+        return {
+            "message": "CSV data uploaded successfully",
+            "readings_imported": len(readings),
+            "data_format": data_format
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error uploading CSV: {e}")
+        raise HTTPException(status_code=500, detail="Failed to upload CSV data")
+
 async def setup_usage_scenario(scenario: str, user_id: str = Depends(get_current_user)):
     """Set up a complete usage scenario (property + devices + mock data)"""
     if not PROPERTY_MANAGEMENT_ENABLED:
