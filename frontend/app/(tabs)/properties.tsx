@@ -146,7 +146,7 @@ export default function Properties() {
       const token = await AsyncStorage.getItem('energo_token');
       if (!token) return;
 
-      const response = await fetch(`${BACKEND_URL}/properties`, {
+      const response = await fetch(`${BACKEND_URL}/api/properties`, {
         headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json',
@@ -175,7 +175,7 @@ export default function Properties() {
       const token = await AsyncStorage.getItem('energo_token');
       if (!token) return;
 
-      const response = await fetch(`${BACKEND_URL}/properties/${propertyId}/devices`, {
+      const response = await fetch(`${BACKEND_URL}/api/properties/${propertyId}/devices`, {
         headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json',
@@ -193,7 +193,7 @@ export default function Properties() {
 
   const loadDeviceTemplates = async () => {
     try {
-      const response = await fetch(`${BACKEND_URL}/device-templates`);
+      const response = await fetch(`${BACKEND_URL}/api/device-templates`);
       if (response.ok) {
         const data = await response.json();
         setDeviceTemplates(data.common_devices || []);
@@ -205,7 +205,7 @@ export default function Properties() {
 
   const loadUsageScenarios = async () => {
     try {
-      const response = await fetch(`${BACKEND_URL}/usage-scenarios`);
+      const response = await fetch(`${BACKEND_URL}/api/usage-scenarios`);
       if (response.ok) {
         const data = await response.json();
         setUsageScenarios(data.scenarios || {});
@@ -221,7 +221,7 @@ export default function Properties() {
       const token = await AsyncStorage.getItem('energo_token');
       if (!token) return;
 
-      const response = await fetch(`${BACKEND_URL}/setup-scenario/${scenarioKey}`, {
+      const response = await fetch(`${BACKEND_URL}/api/setup-scenario/${scenarioKey}`, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -274,7 +274,7 @@ export default function Properties() {
       const token = await AsyncStorage.getItem('energo_token');
       if (!token) return;
 
-      const response = await fetch(`${BACKEND_URL}/properties/${selectedProperty.id}/devices`, {
+      const response = await fetch(`${BACKEND_URL}/api/properties/${selectedProperty.id}/devices`, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -321,7 +321,7 @@ export default function Properties() {
         api_provider: null,
       };
 
-      const response = await fetch(`${BACKEND_URL}/properties`, {
+      const response = await fetch(`${BACKEND_URL}/api/properties`, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${token}`,

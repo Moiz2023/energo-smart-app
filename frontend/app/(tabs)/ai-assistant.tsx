@@ -106,7 +106,7 @@ export default function AIAssistant() {
         return;
       }
 
-      const response = await fetch(`${BACKEND_URL}/ai-insights`, {
+      const response = await fetch(`${BACKEND_URL}/api/ai-insights`, {
         headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json',
@@ -138,7 +138,7 @@ export default function AIAssistant() {
       const token = await AsyncStorage.getItem('energo_token');
       if (!token) return;
 
-      const response = await fetch(`${BACKEND_URL}/ai-chat/history`, {
+      const response = await fetch(`${BACKEND_URL}/api/ai-chat/history`, {
         headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json',
@@ -199,7 +199,7 @@ export default function AIAssistant() {
         return;
       }
 
-      const response = await fetch(`${BACKEND_URL}/ai-chat`, {
+      const response = await fetch(`${BACKEND_URL}/api/ai-chat`, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${token}`,

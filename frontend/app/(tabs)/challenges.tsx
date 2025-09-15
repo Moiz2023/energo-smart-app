@@ -65,13 +65,13 @@ export default function Challenges() {
       }
 
       const [challengesResponse, badgesResponse] = await Promise.all([
-        fetch(`${BACKEND_URL}/challenges`, {
+        fetch(`${BACKEND_URL}/api/challenges`, {
           headers: {
             'Authorization': `Bearer ${token}`,
             'Content-Type': 'application/json',
           },
         }),
-        fetch(`${BACKEND_URL}/badges`, {
+        fetch(`${BACKEND_URL}/api/badges`, {
           headers: {
             'Authorization': `Bearer ${token}`,
             'Content-Type': 'application/json',
