@@ -861,7 +861,7 @@ export default function Properties() {
             <View style={styles.infoCard}>
               <Text style={styles.cardTitle}>Property Information</Text>
               <Text style={styles.infoText}>📍 {selectedProperty.address}</Text>
-              <Text style={styles.infoText">🏙️ {selectedProperty.city}, {selectedProperty.region.toUpperCase()}</Text>
+              <Text style={styles.infoText}>🏙️ {selectedProperty.city}, {selectedProperty.region.toUpperCase()}</Text>
               {selectedProperty.square_meters && (
                 <Text style={styles.infoText}>📐 {selectedProperty.square_meters}m² • {selectedProperty.occupants || 1} occupants</Text>
               )}
