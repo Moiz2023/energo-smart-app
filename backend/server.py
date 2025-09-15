@@ -1978,6 +1978,138 @@ async def upload_csv_meter_data(
         logger.error(f"Error uploading CSV: {e}")
         raise HTTPException(status_code=500, detail="Failed to upload CSV data")
 
+@api_router.get("/properties/{property_id}/consumption-analysis")
+async def get_consumption_analysis(property_id: str, user_id: str = Depends(get_current_user)):
+    """Get detailed consumption analysis for a property"""
+    try:
+        if not PROPERTY_MANAGEMENT_ENABLED:
+            raise HTTPException(status_code=503, detail="Property management features not available")
+        
+        # Verify property exists and belongs to user
+        property_doc = await db.properties.find_one({"id": property_id, "user_id": user_id, "active": True})
+        if not property_doc:
+            raise HTTPException(status_code=404, detail="Property not found")
+        
+        # Get devices for this property
+        devices = []
+        async for device_doc in db.devices.find({"property_id": property_id, "user_id": user_id, "active": True}):
+            device_doc.pop("_id", None)
+            devices.append(device_doc)
+        
+        # Get recent meter readings (last 30 days)
+        thirty_days_ago = datetime.utcnow() - timedelta(days=30)
+        recent_readings = []
+        async for reading in db.meter_readings.find(
+            {"property_id": property_id, "timestamp": {"$gte": thirty_days_ago}}
+        ).sort("timestamp", -1).limit(720):  # 30 days of hourly data
+            reading.pop("_id", None)
+            recent_readings.append(reading)
+        
+        # Perform detailed analysis if we have data
+        analysis_result = {
+            "property_id": property_id,
+            "analysis_period": {
+                "start_date": thirty_days_ago.isoformat(),
+                "end_date": datetime.utcnow().isoformat(),
+                "days_analyzed": 30
+            },
+            "device_breakdown": [],
+            "consumption_patterns": {},
+            "efficiency_insights": [],
+            "cost_analysis": {},
+            "alerts": [],
+            "recommendations": []
+        }
+        
+        if devices and recent_readings:
+            try:
+                from models import Device, Property, MeterReading
+                from consumption_engine import ConsumptionAnalysisEngine
+                
+                # Convert to model objects
+                property_obj = Property(**property_doc)
+                device_objects = [Device(**device_data) for device_data in devices]
+                reading_objects = [MeterReading(**reading_data) for reading_data in recent_readings]
+                
+                engine = ConsumptionAnalysisEngine()
+                
+                # Calculate device consumption estimates
+                device_estimates = []
+                total_estimated_kwh = 0
+                total_estimated_cost = 0
+                
+                for device_obj in device_objects:
+                    estimate = engine.calculate_device_consumption_estimate(
+                        device_obj, thirty_days_ago, datetime.utcnow(), property_obj
+                    )
+                    device_estimates.append(estimate.dict())
+                    total_estimated_kwh += estimate.estimated_monthly_kwh
+                    total_estimated_cost += estimate.estimated_monthly_cost
+                
+                analysis_result["device_breakdown"] = device_estimates
+                
+                # Analyze consumption patterns
+                if reading_objects:
+                    total_actual_kwh = sum(r.consumption_kwh for r in reading_objects)
+                    total_actual_cost = sum(r.cost_euros or 0 for r in reading_objects)
+                    
+                    analysis_result["consumption_patterns"] = {
+                        "total_actual_kwh": round(total_actual_kwh, 2),
+                        "total_estimated_kwh": round(total_estimated_kwh, 2),
+                        "accuracy_percentage": round((min(total_actual_kwh, total_estimated_kwh) / max(total_actual_kwh, total_estimated_kwh)) * 100, 1) if max(total_actual_kwh, total_estimated_kwh) > 0 else 0,
+                        "average_daily_kwh": round(total_actual_kwh / 30, 2),
+                        "peak_consumption_day": max(reading_objects, key=lambda x: x.consumption_kwh).timestamp.date().isoformat() if reading_objects else None,
+                        "lowest_consumption_day": min(reading_objects, key=lambda x: x.consumption_kwh).timestamp.date().isoformat() if reading_objects else None
+                    }
+                    
+                    analysis_result["cost_analysis"] = {
+                        "total_actual_cost": round(total_actual_cost, 2),
+                        "total_estimated_cost": round(total_estimated_cost, 2),
+                        "average_daily_cost": round(total_actual_cost / 30, 2),
+                        "cost_per_kwh_average": round(total_actual_cost / total_actual_kwh, 3) if total_actual_kwh > 0 else 0
+                    }
+                
+                # Generate efficiency insights
+                high_consumption_devices = [est for est in device_estimates if est["estimated_monthly_kwh"] > 50]
+                analysis_result["efficiency_insights"] = [
+                    {
+                        "type": "high_consumption_devices",
+                        "message": f"Found {len(high_consumption_devices)} devices with high monthly consumption (>50 kWh)",
+                        "devices": [d["device_name"] for d in high_consumption_devices[:3]],
+                        "potential_savings": f"€{sum(d['estimated_monthly_cost'] for d in high_consumption_devices) * 0.15:.0f}/month"
+                    }
+                ] if high_consumption_devices else []
+                
+                # Generate recommendations
+                analysis_result["recommendations"] = [
+                    {
+                        "category": "device_optimization",
+                        "title": "Device Usage Optimization",
+                        "description": "Consider adjusting usage patterns for high-consumption devices",
+                        "priority": "medium",
+                        "potential_savings": f"€{total_estimated_cost * 0.1:.0f}/month"
+                    },
+                    {
+                        "category": "monitoring",
+                        "title": "Smart Monitoring",
+                        "description": "Add smart plugs to high-consumption devices for better tracking",
+                        "priority": "low",
+                        "potential_savings": f"€{total_estimated_cost * 0.05:.0f}/month"
+                    }
+                ]
+                
+            except Exception as e:
+                logger.warning(f"Error performing detailed analysis: {e}")
+                analysis_result["error"] = "Detailed analysis unavailable"
+        
+        return analysis_result
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error performing consumption analysis: {e}")
+        raise HTTPException(status_code=500, detail="Failed to perform consumption analysis")
+
 async def setup_usage_scenario(scenario: str, user_id: str = Depends(get_current_user)):
     """Set up a complete usage scenario (property + devices + mock data)"""
     if not PROPERTY_MANAGEMENT_ENABLED:
