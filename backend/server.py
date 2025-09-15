@@ -1516,6 +1516,8 @@ async def create_property(property_data: dict, user_id: str = Depends(get_curren
         
         await db.properties.insert_one(property_dict)
         
+        # Remove MongoDB _id field before returning
+        property_dict.pop("_id", None)
         return property_dict
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to create property: {str(e)}")
