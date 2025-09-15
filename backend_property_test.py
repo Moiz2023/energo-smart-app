@@ -293,7 +293,7 @@ class PropertyManagementTester:
         }
         
         scenario_data = {
-            "scenario": "family",
+            "scenario": "family_home",
             "generate_mock_data": True
         }
         
