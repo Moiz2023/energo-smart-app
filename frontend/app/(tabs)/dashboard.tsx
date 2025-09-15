@@ -101,13 +101,13 @@ export default function Dashboard() {
 
       // Fetch dashboard data and recent badges in parallel
       const [dashboardResponse, badgesResponse] = await Promise.all([
-        fetch(`${BACKEND_URL}/dashboard?period=${selectedPeriod}`, {
+        fetch(`${BACKEND_URL}/api/dashboard?period=${selectedPeriod}`, {
           headers: {
             'Authorization': `Bearer ${token}`,
             'Content-Type': 'application/json',
           },
         }),
-        fetch(`${BACKEND_URL}/badges`, {
+        fetch(`${BACKEND_URL}/api/badges`, {
           headers: {
             'Authorization': `Bearer ${token}`,
             'Content-Type': 'application/json',
