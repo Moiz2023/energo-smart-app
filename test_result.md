@@ -201,6 +201,66 @@ backend:
           agent: "testing"
           comment: "Protected endpoints properly secured. All 4/4 tested endpoints (/dashboard, /ai-insights, /badges, /settings) correctly return 401/403 for unauthorized access."
 
+  - task: "Property & Device Management - Device Templates & Scenarios"
+    implemented: true
+    working: true
+    file: "/app/backend/server.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+        - working: true
+          agent: "testing"
+          comment: "Device templates endpoint (/api/device-templates) working perfectly. Retrieved 9 common devices across 7 categories. Usage scenarios endpoint (/api/usage-scenarios) working correctly with 5 scenarios: family_home, ev_owner, small_business, studio_apartment, smart_home."
+
+  - task: "Property & Device Management - Property CRUD Operations"
+    implemented: true
+    working: true
+    file: "/app/backend/server.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+        - working: true
+          agent: "testing"
+          comment: "Property CRUD operations working perfectly. POST /api/properties creates properties successfully. GET /api/properties retrieves user properties correctly. Fixed MongoDB ObjectId serialization issues. Property creation and retrieval working with proper data structures."
+
+  - task: "Property & Device Management - Device Management Operations"
+    implemented: true
+    working: true
+    file: "/app/backend/server.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+        - working: true
+          agent: "testing"
+          comment: "Device management operations working perfectly. POST /api/properties/{property_id}/devices creates devices successfully. GET /api/properties/{property_id}/devices retrieves property devices correctly. PUT /api/properties/{property_id}/devices/{device_id} updates devices properly. DELETE /api/properties/{property_id}/devices/{device_id} performs soft delete correctly."
+
+  - task: "Property & Device Management - Advanced Features"
+    implemented: true
+    working: true
+    file: "/app/backend/server.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+        - working: true
+          agent: "testing"
+          comment: "Advanced features working perfectly. POST /api/properties/{property_id}/setup-scenario sets up properties with predefined scenarios (family_home scenario tested with 8 devices created). POST /api/properties/{property_id}/upload-csv successfully imports CSV meter data (168 hourly readings imported). GET /api/properties/{property_id}/consumption-analysis provides detailed consumption analysis with device breakdown, patterns, insights, and recommendations."
+
+  - task: "Property & Device Management - Mock Data & Analysis"
+    implemented: true
+    working: true
+    file: "/app/backend/server.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+        - working: true
+          agent: "testing"
+          comment: "Mock data generation and analysis working correctly. Property details endpoint (/api/properties/{property_id}) provides comprehensive property information including devices, estimates, alerts, and analysis. Consumption analysis engine integrated and functional. CSV upload generates realistic meter readings for testing and analysis."
+
 frontend:
   - task: "Frontend Testing"
     implemented: true
