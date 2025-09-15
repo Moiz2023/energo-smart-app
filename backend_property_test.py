@@ -570,6 +570,62 @@ class PropertyManagementTester:
             
         return False
 
+    def test_consumption_analysis(self):
+        """Test GET /api/properties/{property_id}/consumption-analysis endpoint"""
+        print("\n📊 Testing Consumption Analysis...")
+        
+        if not self.auth_token or not self.property_id:
+            self.log_result("Consumption Analysis", False, "No auth token or property ID available")
+            return False
+        
+        headers = {
+            "Authorization": f"Bearer {self.auth_token}",
+            "Content-Type": "application/json"
+        }
+        
+        try:
+            response = self.session.get(
+                f"{self.base_url}/properties/{self.property_id}/consumption-analysis",
+                headers=headers,
+                timeout=30
+            )
+            
+            if response.status_code == 200:
+                data = response.json()
+                required_keys = ["property_id", "analysis_period", "device_breakdown", "consumption_patterns"]
+                
+                if all(key in data for key in required_keys):
+                    analysis_period = data["analysis_period"]
+                    device_breakdown = data["device_breakdown"]
+                    consumption_patterns = data["consumption_patterns"]
+                    
+                    days_analyzed = analysis_period.get("days_analyzed", 0)
+                    device_count = len(device_breakdown)
+                    
+                    self.log_result("Consumption Analysis", True, 
+                                  f"Analysis for {days_analyzed} days, {device_count} devices analyzed")
+                    
+                    # Check for additional analysis data
+                    if "efficiency_insights" in data:
+                        insights_count = len(data["efficiency_insights"])
+                        print(f"  💡 Efficiency insights: {insights_count}")
+                    
+                    if "recommendations" in data:
+                        recommendations_count = len(data["recommendations"])
+                        print(f"  📋 Recommendations: {recommendations_count}")
+                    
+                    return True
+                else:
+                    missing_keys = [key for key in required_keys if key not in data]
+                    self.log_result("Consumption Analysis", False, f"Missing keys: {missing_keys}")
+            else:
+                self.log_result("Consumption Analysis", False, f"Status: {response.status_code}, Response: {response.text}")
+                
+        except Exception as e:
+            self.log_result("Consumption Analysis", False, f"Exception: {str(e)}")
+            
+        return False
+
     def test_delete_device(self):
         """Test DELETE /api/properties/{property_id}/devices/{device_id} endpoint (soft delete)"""
         print("\n🗑️ Testing Delete Device (Soft Delete)...")
