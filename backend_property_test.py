@@ -653,7 +653,11 @@ class PropertyManagementTester:
         if self.property_id:
             self.test_csv_upload()
         
-        # Step 8: Test device deletion (soft delete)
+        # Step 8: Test consumption analysis
+        if self.property_id:
+            self.test_consumption_analysis()
+        
+        # Step 9: Test device deletion (soft delete)
         if self.property_id and self.device_id:
             self.test_delete_device()
         
