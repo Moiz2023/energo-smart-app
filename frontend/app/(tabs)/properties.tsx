@@ -531,7 +531,7 @@ export default function Properties() {
                     <Text style={styles.propertyType}>{item.property_type.toUpperCase()}</Text>
                   </View>
                   <Text style={styles.propertyAddress}>{item.address}</Text>
-                  <Text style={styles.propertyLocation}>{item.city}, {item.region.toUpperCase()}</Text>
+                  <Text style={styles.propertyLocation}>{item.city}{item.region ? `, ${item.region.toUpperCase()}` : ""}</Text>
                   {item.square_meters && (
                     <Text style={styles.propertyDetails}>{item.square_meters}m² • {item.occupants || 1} occupants</Text>
                   )}
