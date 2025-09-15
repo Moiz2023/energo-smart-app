@@ -115,7 +115,7 @@ export default function Index() {
     setLoginError('');
     
     try {
-      const endpoint = isLogin ? '/auth/login' : '/auth/register';
+      const endpoint = isLogin ? '/api/auth/login' : '/api/auth/register';
       const body = isLogin 
         ? { email: email.trim().toLowerCase(), password }
         : { email: email.trim().toLowerCase(), password, name: name.trim() };
