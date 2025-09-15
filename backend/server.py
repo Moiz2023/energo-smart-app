@@ -1533,6 +1533,10 @@ async def get_user_properties(user_id: str = Depends(get_current_user)):
             {"user_id": user_id, "active": True}
         ).sort("created_at", -1).to_list(length=100))
         
+        # Remove MongoDB _id fields
+        for prop in properties:
+            prop.pop("_id", None)
+        
         return properties
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to fetch properties: {str(e)}")
