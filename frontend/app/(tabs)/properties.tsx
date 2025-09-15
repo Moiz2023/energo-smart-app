@@ -12,7 +12,6 @@ import {
   Modal,
   TextInput,
   FlatList,
-  Switch,
   KeyboardAvoidingView,
   Platform,
 } from 'react-native';
@@ -25,15 +24,14 @@ import { useFocusEffect } from '@react-navigation/native';
 const { width } = Dimensions.get('window');
 const BACKEND_URL = process.env.EXPO_PUBLIC_BACKEND_URL;
 
-// Types for Property Management
 interface Property {
   id: string;
   name: string;
-  property_type: 'home' | 'office' | 'rental' | 'vacation' | 'other';
+  property_type: string;
   address: string;
   city: string;
   postal_code: string;
-  region: 'brussels' | 'flanders' | 'wallonia';
+  region: string;
   square_meters?: number;
   occupants?: number;
   meter_id?: string;
@@ -126,7 +124,6 @@ export default function Properties() {
   
   // View states
   const [currentView, setCurrentView] = useState<'list' | 'details' | 'devices'>('list');
-  const [selectedDevice, setSelectedDevice] = useState<Device | null>(null);
   
   // Form states
   const [propertyForm, setPropertyForm] = useState({
@@ -214,7 +211,7 @@ export default function Properties() {
       ]);
 
       if (propertiesResponse.ok) {
-        setProperties(propertiesData.properties || []);
+        setProperties(propertiesData.properties || propertiesData || []);
       }
 
       if (templatesResponse.ok && templatesData.common_devices) {
@@ -288,7 +285,6 @@ export default function Properties() {
       });
 
       if (response.ok) {
-        const data = await response.json();
         Alert.alert('Success', 'Property created successfully');
         setShowPropertyModal(false);
         resetPropertyForm();
@@ -366,48 +362,6 @@ export default function Properties() {
       if (response.ok) {
         Alert.alert('Success', 'Device added successfully');
         setShowDeviceTemplates(false);
-        loadPropertyDetails(selectedProperty);
-      } else {
-        const errorData = await response.json();
-        throw new Error(errorData.detail || 'Failed to add device');
-      }
-    } catch (error) {
-      console.error('Error adding device:', error);
-      Alert.alert('Error', error.message || 'Failed to add device');
-    }
-  };
-
-  const addCustomDevice = async () => {
-    try {
-      if (!selectedProperty || !deviceForm.name.trim() || !deviceForm.estimated_wattage) {
-        Alert.alert('Error', 'Please fill in all required fields');
-        return;
-      }
-
-      const token = await AsyncStorage.getItem('energo_token');
-      if (!token) return;
-
-      const deviceData = {
-        ...deviceForm,
-        estimated_wattage: parseInt(deviceForm.estimated_wattage),
-        daily_runtime_hours: parseFloat(deviceForm.daily_runtime_hours) || 0,
-        weekly_runtime_hours: parseFloat(deviceForm.weekly_runtime_hours) || 0,
-        standby_wattage: parseInt(deviceForm.standby_wattage) || 0,
-      };
-
-      const response = await fetch(`${BACKEND_URL}/api/properties/${selectedProperty.id}/devices`, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(deviceData),
-      });
-
-      if (response.ok) {
-        Alert.alert('Success', 'Device added successfully');
-        setShowDeviceModal(false);
-        resetDeviceForm();
         loadPropertyDetails(selectedProperty);
       } else {
         const errorData = await response.json();
@@ -528,90 +482,6 @@ export default function Properties() {
     loadPropertiesData().finally(() => setRefreshing(false));
   }, []);
 
-  const renderPropertyCard = ({ item }: { item: Property }) => (
-    <TouchableOpacity
-      style={styles.propertyCard}
-      onPress={() => loadPropertyDetails(item)}
-    >
-      <LinearGradient
-        colors={['#1a1a1a', '#2a2a2a']}
-        style={styles.propertyCardGradient}
-      >
-        <View style={styles.propertyHeader}>
-          <Text style={styles.propertyName}>{item.name}</Text>
-          <Text style={styles.propertyType}>{item.property_type.toUpperCase()}</Text>
-        </View>
-        <Text style={styles.propertyAddress}>{item.address}</Text>
-        <Text style={styles.propertyLocation}>{item.city}, {item.region.toUpperCase()}</Text>
-        {item.square_meters && (
-          <Text style={styles.propertyDetails}>{item.square_meters}m² • {item.occupants || 1} occupants</Text>
-        )}
-      </LinearGradient>
-    </TouchableOpacity>
-  );
-
-  const renderDeviceCard = ({ item }: { item: Device }) => {
-    const estimate = propertyDetails?.device_estimates.find(e => e.device_id === item.id);
-    
-    return (
-      <View style={styles.deviceCard}>
-        <View style={styles.deviceHeader}>
-          <Text style={styles.deviceName}>{item.name}</Text>
-          <TouchableOpacity
-            style={styles.deleteButton}
-            onPress={() => deleteDevice(item)}
-          >
-            <Text style={styles.deleteButtonText}>×</Text>
-          </TouchableOpacity>
-        </View>
-        <Text style={styles.deviceType}>{item.category.replace('_', ' ')} • {item.estimated_wattage}W</Text>
-        <Text style={styles.deviceRuntime}>
-          {item.daily_runtime_hours}h/day • {item.weekly_runtime_hours}h/week
-        </Text>
-        {estimate && (
-          <View style={styles.deviceEstimate}>
-            <Text style={styles.estimateText}>
-              Est: {estimate.estimated_daily_kwh.toFixed(2)} kWh/day • €{estimate.estimated_daily_cost.toFixed(2)}/day
-            </Text>
-            <Text style={styles.confidenceText}>
-              Confidence: {(estimate.confidence_score * 100).toFixed(0)}%
-            </Text>
-          </View>
-        )}
-        {item.smart_integration_id && (
-          <Text style={styles.smartIntegration}>📱 Smart: {item.smart_integration_id}</Text>
-        )}
-      </View>
-    );
-  };
-
-  const renderDeviceTemplate = ({ item }: { item: DeviceTemplate }) => (
-    <TouchableOpacity
-      style={styles.templateCard}
-      onPress={() => addDeviceFromTemplate(item)}
-    >
-      <Text style={styles.templateName}>{item.name}</Text>
-      <Text style={styles.templateDetails}>
-        {item.typical_wattage}W • {item.typical_daily_hours}h/day
-      </Text>
-      <Text style={styles.templateCategory}>{item.category.replace('_', ' ')}</Text>
-    </TouchableOpacity>
-  );
-
-  const renderScenarioOption = (scenarioKey: string, scenario: UsageScenario) => (
-    <TouchableOpacity
-      key={scenarioKey}
-      style={styles.scenarioCard}
-      onPress={() => setupPropertyScenario(scenarioKey)}
-    >
-      <Text style={styles.scenarioName}>{scenario.name}</Text>
-      <Text style={styles.scenarioDescription}>{scenario.description}</Text>
-      <Text style={styles.scenarioStats}>
-        {scenario.device_count} devices • {scenario.typical_monthly_kwh} kWh/month • €{scenario.typical_monthly_cost}/month
-      </Text>
-    </TouchableOpacity>
-  );
-
   if (loading) {
     return (
       <SafeAreaView style={styles.container}>
@@ -628,7 +498,7 @@ export default function Properties() {
     return (
       <SafeAreaView style={styles.container}>
         <View style={styles.header}>
-          <Text style={styles.title}>Properties</Text>
+          <Text style={styles.title}>Properties & Devices</Text>
           <TouchableOpacity
             style={styles.addButton}
             onPress={() => setShowPropertyModal(true)}
@@ -647,7 +517,27 @@ export default function Properties() {
         ) : (
           <FlatList
             data={properties}
-            renderItem={renderPropertyCard}
+            renderItem={({ item }) => (
+              <TouchableOpacity
+                style={styles.propertyCard}
+                onPress={() => loadPropertyDetails(item)}
+              >
+                <LinearGradient
+                  colors={['#1a1a1a', '#2a2a2a']}
+                  style={styles.propertyCardGradient}
+                >
+                  <View style={styles.propertyHeader}>
+                    <Text style={styles.propertyName}>{item.name}</Text>
+                    <Text style={styles.propertyType}>{item.property_type.toUpperCase()}</Text>
+                  </View>
+                  <Text style={styles.propertyAddress}>{item.address}</Text>
+                  <Text style={styles.propertyLocation}>{item.city}, {item.region.toUpperCase()}</Text>
+                  {item.square_meters && (
+                    <Text style={styles.propertyDetails}>{item.square_meters}m² • {item.occupants || 1} occupants</Text>
+                  )}
+                </LinearGradient>
+              </TouchableOpacity>
+            )}
             keyExtractor={(item) => item.id}
             contentContainerStyle={styles.propertiesList}
             refreshControl={
@@ -656,7 +546,12 @@ export default function Properties() {
             ListEmptyComponent={
               <View style={styles.emptyContainer}>
                 <Text style={styles.emptyText}>No properties yet</Text>
-                <Text style={styles.emptySubtext}>Add your first property to get started</Text>
+                <Text style={styles.emptySubtext}>Add your first property to get started with device management</Text>
+                <Text style={styles.instructionText}>
+                  {'\n'}📱 Tap "Add Property" to create your first property
+                  {'\n'}🏠 Then add devices and see their consumption
+                  {'\n'}📊 Upload CSV data or use demo scenarios
+                </Text>
               </View>
             }
           />
@@ -699,33 +594,6 @@ export default function Properties() {
                 </View>
 
                 <View style={styles.formGroup}>
-                  <Text style={styles.formLabel}>Property Type</Text>
-                  <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-                    <View style={styles.typeSelector}>
-                      {['home', 'office', 'rental', 'vacation', 'other'].map((type) => (
-                        <TouchableOpacity
-                          key={type}
-                          style={[
-                            styles.typeOption,
-                            propertyForm.property_type === type && styles.typeOptionSelected
-                          ]}
-                          onPress={() => setPropertyForm({ ...propertyForm, property_type: type })}
-                        >
-                          <Text
-                            style={[
-                              styles.typeOptionText,
-                              propertyForm.property_type === type && styles.typeOptionTextSelected
-                            ]}
-                          >
-                            {type.charAt(0).toUpperCase() + type.slice(1)}
-                          </Text>
-                        </TouchableOpacity>
-                      ))}
-                    </View>
-                  </ScrollView>
-                </View>
-
-                <View style={styles.formGroup}>
                   <Text style={styles.formLabel}>Address *</Text>
                   <TextInput
                     style={styles.formInput}
@@ -743,50 +611,10 @@ export default function Properties() {
                       style={styles.formInput}
                       value={propertyForm.city}
                       onChangeText={(text) => setPropertyForm({ ...propertyForm, city: text })}
-                      placeholder="City"
+                      placeholder="Brussels"
                       placeholderTextColor="#666"
                     />
                   </View>
-                  <View style={styles.formGroupHalf}>
-                    <Text style={styles.formLabel}>Postal Code</Text>
-                    <TextInput
-                      style={styles.formInput}
-                      value={propertyForm.postal_code}
-                      onChangeText={(text) => setPropertyForm({ ...propertyForm, postal_code: text })}
-                      placeholder="1000"
-                      placeholderTextColor="#666"
-                    />
-                  </View>
-                </View>
-
-                <View style={styles.formGroup}>
-                  <Text style={styles.formLabel}>Region</Text>
-                  <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-                    <View style={styles.typeSelector}>
-                      {['brussels', 'flanders', 'wallonia'].map((region) => (
-                        <TouchableOpacity
-                          key={region}
-                          style={[
-                            styles.typeOption,
-                            propertyForm.region === region && styles.typeOptionSelected
-                          ]}
-                          onPress={() => setPropertyForm({ ...propertyForm, region: region })}
-                        >
-                          <Text
-                            style={[
-                              styles.typeOptionText,
-                              propertyForm.region === region && styles.typeOptionTextSelected
-                            ]}
-                          >
-                            {region.charAt(0).toUpperCase() + region.slice(1)}
-                          </Text>
-                        </TouchableOpacity>
-                      ))}
-                    </View>
-                  </ScrollView>
-                </View>
-
-                <View style={styles.formRow}>
                   <View style={styles.formGroupHalf}>
                     <Text style={styles.formLabel}>Size (m²)</Text>
                     <TextInput
@@ -798,28 +626,6 @@ export default function Properties() {
                       keyboardType="numeric"
                     />
                   </View>
-                  <View style={styles.formGroupHalf}>
-                    <Text style={styles.formLabel}>Occupants</Text>
-                    <TextInput
-                      style={styles.formInput}
-                      value={propertyForm.occupants}
-                      onChangeText={(text) => setPropertyForm({ ...propertyForm, occupants: text })}
-                      placeholder="4"
-                      placeholderTextColor="#666"
-                      keyboardType="numeric"
-                    />
-                  </View>
-                </View>
-
-                <View style={styles.formGroup}>
-                  <Text style={styles.formLabel}>Smart Meter ID (Optional)</Text>
-                  <TextInput
-                    style={styles.formInput}
-                    value={propertyForm.meter_id}
-                    onChangeText={(text) => setPropertyForm({ ...propertyForm, meter_id: text })}
-                    placeholder="e.g., BE_123456789"
-                    placeholderTextColor="#666"
-                  />
                 </View>
 
                 <TouchableOpacity
@@ -865,15 +671,12 @@ export default function Properties() {
               {selectedProperty.square_meters && (
                 <Text style={styles.infoText}>📐 {selectedProperty.square_meters}m² • {selectedProperty.occupants || 1} occupants</Text>
               )}
-              {selectedProperty.meter_id && (
-                <Text style={styles.infoText}>⚡ Meter: {selectedProperty.meter_id}</Text>
-              )}
             </View>
 
             {/* Summary Statistics */}
             {propertyDetails && (
               <View style={styles.summaryCard}>
-                <Text style={styles.cardTitle}>Summary</Text>
+                <Text style={styles.cardTitle}>📊 Consumption Summary</Text>
                 <View style={styles.summaryRow}>
                   <View style={styles.summaryItem}>
                     <Text style={styles.summaryNumber}>{propertyDetails.summary.total_devices}</Text>
@@ -899,6 +702,29 @@ export default function Properties() {
               </View>
             )}
 
+            {/* Device Consumption Breakdown */}
+            {propertyDetails && propertyDetails.device_estimates.length > 0 && (
+              <View style={styles.consumptionCard}>
+                <Text style={styles.cardTitle}>⚡ Device Consumption Breakdown</Text>
+                {propertyDetails.device_estimates.map((estimate, index) => (
+                  <View key={index} style={styles.deviceEstimateCard}>
+                    <Text style={styles.deviceEstimateName}>{estimate.device_name}</Text>
+                    <View style={styles.deviceEstimateRow}>
+                      <Text style={styles.deviceEstimateText}>
+                        {estimate.estimated_daily_kwh.toFixed(2)} kWh/day • €{estimate.estimated_daily_cost.toFixed(2)}/day
+                      </Text>
+                      <Text style={styles.deviceEstimateMonthly}>
+                        €{estimate.estimated_monthly_cost.toFixed(0)}/month
+                      </Text>
+                    </View>
+                    <Text style={styles.confidenceText}>
+                      Confidence: {(estimate.confidence_score * 100).toFixed(0)}%
+                    </Text>
+                  </View>
+                ))}
+              </View>
+            )}
+
             {/* Alerts */}
             {propertyDetails?.alerts && propertyDetails.alerts.length > 0 && (
               <View style={styles.alertsCard}>
@@ -918,19 +744,24 @@ export default function Properties() {
                 style={styles.actionButton}
                 onPress={() => setCurrentView('devices')}
               >
-                <Text style={styles.actionButtonText}>📱 Manage Devices</Text>
+                <Text style={styles.actionButtonText}>📱 Manage Devices ({devices.length})</Text>
+                <Text style={styles.actionButtonSubtext}>Add, edit, or remove devices</Text>
               </TouchableOpacity>
+              
               <TouchableOpacity
                 style={styles.actionButton}
                 onPress={() => setShowScenarioModal(true)}
               >
-                <Text style={styles.actionButtonText}>🎭 Load Scenario</Text>
+                <Text style={styles.actionButtonText}>🎭 Load Demo Scenario</Text>
+                <Text style={styles.actionButtonSubtext}>Family, EV Owner, or Business setup</Text>
               </TouchableOpacity>
+              
               <TouchableOpacity
                 style={styles.actionButton}
                 onPress={() => setShowCSVUploadModal(true)}
               >
-                <Text style={styles.actionButtonText}>📊 Upload CSV Data</Text>
+                <Text style={styles.actionButtonText}>📊 Upload CSV Meter Data</Text>
+                <Text style={styles.actionButtonSubtext}>Import your real consumption data</Text>
               </TouchableOpacity>
             </View>
           </ScrollView>
@@ -953,9 +784,19 @@ export default function Properties() {
               </TouchableOpacity>
             </View>
             <ScrollView style={styles.modalContent}>
-              {Object.entries(usageScenarios).map(([key, scenario]) =>
-                renderScenarioOption(key, scenario)
-              )}
+              {Object.entries(usageScenarios).map(([key, scenario]) => (
+                <TouchableOpacity
+                  key={key}
+                  style={styles.scenarioCard}
+                  onPress={() => setupPropertyScenario(key)}
+                >
+                  <Text style={styles.scenarioName}>{scenario.name}</Text>
+                  <Text style={styles.scenarioDescription}>{scenario.description}</Text>
+                  <Text style={styles.scenarioStats}>
+                    {scenario.device_count} devices • {scenario.typical_monthly_kwh} kWh/month • €{scenario.typical_monthly_cost}/month
+                  </Text>
+                </TouchableOpacity>
+              ))}
             </ScrollView>
           </SafeAreaView>
         </Modal>
@@ -986,33 +827,6 @@ export default function Properties() {
                   Expected columns: timestamp, consumption_kwh, production_kwh (optional)
                   {'\n'}Example:{'\n'}2024-01-01 00:00:00,1.5,0.0{'\n'}2024-01-01 01:00:00,1.2,0.0
                 </Text>
-
-                <View style={styles.formGroup}>
-                  <Text style={styles.formLabel}>Data Format</Text>
-                  <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-                    <View style={styles.typeSelector}>
-                      {['hourly', 'daily', 'monthly'].map((format) => (
-                        <TouchableOpacity
-                          key={format}
-                          style={[
-                            styles.typeOption,
-                            csvForm.data_format === format && styles.typeOptionSelected
-                          ]}
-                          onPress={() => setCsvForm({ ...csvForm, data_format: format })}
-                        >
-                          <Text
-                            style={[
-                              styles.typeOptionText,
-                              csvForm.data_format === format && styles.typeOptionTextSelected
-                            ]}
-                          >
-                            {format.charAt(0).toUpperCase() + format.slice(1)}
-                          </Text>
-                        </TouchableOpacity>
-                      ))}
-                    </View>
-                  </ScrollView>
-                </View>
 
                 <View style={styles.formGroup}>
                   <Text style={styles.formLabel}>CSV Content</Text>
@@ -1063,13 +877,51 @@ export default function Properties() {
 
         <FlatList
           data={devices}
-          renderItem={renderDeviceCard}
+          renderItem={({ item }) => {
+            const estimate = propertyDetails?.device_estimates.find(e => e.device_id === item.id);
+            
+            return (
+              <View style={styles.deviceCard}>
+                <View style={styles.deviceHeader}>
+                  <Text style={styles.deviceName}>{item.name}</Text>
+                  <TouchableOpacity
+                    style={styles.deleteButton}
+                    onPress={() => deleteDevice(item)}
+                  >
+                    <Text style={styles.deleteButtonText}>×</Text>
+                  </TouchableOpacity>
+                </View>
+                <Text style={styles.deviceType}>{item.category.replace('_', ' ')} • {item.estimated_wattage}W</Text>
+                <Text style={styles.deviceRuntime}>
+                  {item.daily_runtime_hours}h/day • {item.weekly_runtime_hours}h/week
+                </Text>
+                {estimate && (
+                  <View style={styles.deviceEstimate}>
+                    <Text style={styles.estimateText}>
+                      Est: {estimate.estimated_daily_kwh.toFixed(2)} kWh/day • €{estimate.estimated_daily_cost.toFixed(2)}/day
+                    </Text>
+                    <Text style={styles.confidenceText}>
+                      Confidence: {(estimate.confidence_score * 100).toFixed(0)}%
+                    </Text>
+                  </View>
+                )}
+                {item.smart_integration_id && (
+                  <Text style={styles.smartIntegration}>📱 Smart: {item.smart_integration_id}</Text>
+                )}
+              </View>
+            );
+          }}
           keyExtractor={(item) => item.id}
           contentContainerStyle={styles.devicesList}
           ListEmptyComponent={
             <View style={styles.emptyContainer}>
               <Text style={styles.emptyText}>No devices yet</Text>
               <Text style={styles.emptySubtext}>Add devices to track their energy consumption</Text>
+              <Text style={styles.instructionText}>
+                {'\n'}📱 Tap "Add Device" to get started
+                {'\n'}⚡ Use quick-add templates or create custom devices
+                {'\n'}📊 See consumption estimates and alerts
+              </Text>
             </View>
           }
         />
@@ -1091,181 +943,25 @@ export default function Properties() {
               </TouchableOpacity>
             </View>
             
-            <View style={styles.templateTabs}>
-              <TouchableOpacity
-                style={styles.templateTab}
-                onPress={() => setShowDeviceModal(true)}
-              >
-                <Text style={styles.templateTabText}>Custom Device</Text>
-              </TouchableOpacity>
-            </View>
-
             <Text style={styles.sectionTitle}>Quick Add - Common Devices</Text>
             <FlatList
               data={deviceTemplates}
-              renderItem={renderDeviceTemplate}
+              renderItem={({ item }) => (
+                <TouchableOpacity
+                  style={styles.templateCard}
+                  onPress={() => addDeviceFromTemplate(item)}
+                >
+                  <Text style={styles.templateName}>{item.name}</Text>
+                  <Text style={styles.templateDetails}>
+                    {item.typical_wattage}W • {item.typical_daily_hours}h/day
+                  </Text>
+                  <Text style={styles.templateCategory}>{item.category.replace('_', ' ')}</Text>
+                </TouchableOpacity>
+              )}
               keyExtractor={(item) => item.device_type}
               contentContainerStyle={styles.templatesList}
               numColumns={2}
             />
-          </SafeAreaView>
-        </Modal>
-
-        {/* Custom Device Modal */}
-        <Modal
-          visible={showDeviceModal}
-          animationType="slide"
-          presentationStyle="formSheet"
-        >
-          <SafeAreaView style={styles.modalContainer}>
-            <KeyboardAvoidingView
-              behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-              style={styles.modalKeyboardView}
-            >
-              <View style={styles.modalHeader}>
-                <Text style={styles.modalTitle}>Add Custom Device</Text>
-                <TouchableOpacity
-                  style={styles.modalCloseButton}
-                  onPress={() => {
-                    setShowDeviceModal(false);
-                    resetDeviceForm();
-                  }}
-                >
-                  <Text style={styles.modalCloseText}>×</Text>
-                </TouchableOpacity>
-              </View>
-              
-              <ScrollView style={styles.modalContent}>
-                <View style={styles.formGroup}>
-                  <Text style={styles.formLabel}>Device Name *</Text>
-                  <TextInput
-                    style={styles.formInput}
-                    value={deviceForm.name}
-                    onChangeText={(text) => setDeviceForm({ ...deviceForm, name: text })}
-                    placeholder="e.g., Kitchen Fridge, Living Room TV"
-                    placeholderTextColor="#666"
-                  />
-                </View>
-
-                <View style={styles.formGroup}>
-                  <Text style={styles.formLabel}>Category</Text>
-                  <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-                    <View style={styles.typeSelector}>
-                      {['major_appliances', 'electronics', 'lighting', 'heating_cooling', 'ev_charging'].map((category) => (
-                        <TouchableOpacity
-                          key={category}
-                          style={[
-                            styles.typeOption,
-                            deviceForm.category === category && styles.typeOptionSelected
-                          ]}
-                          onPress={() => setDeviceForm({ ...deviceForm, category: category })}
-                        >
-                          <Text
-                            style={[
-                              styles.typeOptionText,
-                              deviceForm.category === category && styles.typeOptionTextSelected
-                            ]}
-                          >
-                            {category.replace('_', ' ')}
-                          </Text>
-                        </TouchableOpacity>
-                      ))}
-                    </View>
-                  </ScrollView>
-                </View>
-
-                <View style={styles.formRow}>
-                  <View style={styles.formGroupHalf}>
-                    <Text style={styles.formLabel}>Power (W) *</Text>
-                    <TextInput
-                      style={styles.formInput}
-                      value={deviceForm.estimated_wattage}
-                      onChangeText={(text) => setDeviceForm({ ...deviceForm, estimated_wattage: text })}
-                      placeholder="150"
-                      placeholderTextColor="#666"
-                      keyboardType="numeric"
-                    />
-                  </View>
-                  <View style={styles.formGroupHalf}>
-                    <Text style={styles.formLabel}>Standby (W)</Text>
-                    <TextInput
-                      style={styles.formInput}
-                      value={deviceForm.standby_wattage}
-                      onChangeText={(text) => setDeviceForm({ ...deviceForm, standby_wattage: text })}
-                      placeholder="5"
-                      placeholderTextColor="#666"
-                      keyboardType="numeric"
-                    />
-                  </View>
-                </View>
-
-                <View style={styles.formRow}>
-                  <View style={styles.formGroupHalf}>
-                    <Text style={styles.formLabel}>Daily Hours</Text>
-                    <TextInput
-                      style={styles.formInput}
-                      value={deviceForm.daily_runtime_hours}
-                      onChangeText={(text) => setDeviceForm({ ...deviceForm, daily_runtime_hours: text })}
-                      placeholder="8"
-                      placeholderTextColor="#666"
-                      keyboardType="numeric"
-                    />
-                  </View>
-                  <View style={styles.formGroupHalf}>
-                    <Text style={styles.formLabel}>Weekly Hours</Text>
-                    <TextInput
-                      style={styles.formInput}
-                      value={deviceForm.weekly_runtime_hours}
-                      onChangeText={(text) => setDeviceForm({ ...deviceForm, weekly_runtime_hours: text })}
-                      placeholder="50"
-                      placeholderTextColor="#666"
-                      keyboardType="numeric"
-                    />
-                  </View>
-                </View>
-
-                <View style={styles.formRow}>
-                  <View style={styles.formGroupHalf}>
-                    <Text style={styles.formLabel}>Brand</Text>
-                    <TextInput
-                      style={styles.formInput}
-                      value={deviceForm.brand}
-                      onChangeText={(text) => setDeviceForm({ ...deviceForm, brand: text })}
-                      placeholder="Samsung"
-                      placeholderTextColor="#666"
-                    />
-                  </View>
-                  <View style={styles.formGroupHalf}>
-                    <Text style={styles.formLabel}>Model</Text>
-                    <TextInput
-                      style={styles.formInput}
-                      value={deviceForm.model}
-                      onChangeText={(text) => setDeviceForm({ ...deviceForm, model: text })}
-                      placeholder="RF28R7351SG"
-                      placeholderTextColor="#666"
-                    />
-                  </View>
-                </View>
-
-                <View style={styles.formGroup}>
-                  <Text style={styles.formLabel}>Smart Integration ID</Text>
-                  <TextInput
-                    style={styles.formInput}
-                    value={deviceForm.smart_integration_id}
-                    onChangeText={(text) => setDeviceForm({ ...deviceForm, smart_integration_id: text })}
-                    placeholder="smart_plug_01, channel_3"
-                    placeholderTextColor="#666"
-                  />
-                </View>
-
-                <TouchableOpacity
-                  style={styles.createButton}
-                  onPress={addCustomDevice}
-                >
-                  <Text style={styles.createButtonText}>Add Device</Text>
-                </TouchableOpacity>
-              </ScrollView>
-            </KeyboardAvoidingView>
           </SafeAreaView>
         </Modal>
       </SafeAreaView>
@@ -1410,6 +1106,12 @@ const styles = StyleSheet.create({
     fontSize: 14,
     textAlign: 'center',
   },
+  instructionText: {
+    color: '#666',
+    fontSize: 12,
+    textAlign: 'center',
+    lineHeight: 18,
+  },
   // Modal styles
   modalContainer: {
     flex: 1,
@@ -1477,30 +1179,6 @@ const styles = StyleSheet.create({
     height: 120,
     textAlignVertical: 'top',
   },
-  typeSelector: {
-    flexDirection: 'row',
-    gap: 8,
-  },
-  typeOption: {
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 20,
-    backgroundColor: '#1a1a1a',
-    borderWidth: 1,
-    borderColor: '#333',
-  },
-  typeOptionSelected: {
-    backgroundColor: '#4CAF50',
-    borderColor: '#4CAF50',
-  },
-  typeOptionText: {
-    color: '#999',
-    fontSize: 14,
-    fontWeight: '600',
-  },
-  typeOptionTextSelected: {
-    color: '#fff',
-  },
   createButton: {
     backgroundColor: '#4CAF50',
     paddingVertical: 16,
@@ -1559,6 +1237,44 @@ const styles = StyleSheet.create({
     fontSize: 12,
     marginTop: 4,
   },
+  consumptionCard: {
+    backgroundColor: '#1a1a1a',
+    padding: 20,
+    borderRadius: 12,
+    marginBottom: 16,
+  },
+  deviceEstimateCard: {
+    backgroundColor: '#0f0f0f',
+    padding: 12,
+    borderRadius: 8,
+    marginBottom: 8,
+  },
+  deviceEstimateName: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: 'bold',
+    marginBottom: 4,
+  },
+  deviceEstimateRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 4,
+  },
+  deviceEstimateText: {
+    color: '#ccc',
+    fontSize: 14,
+    flex: 1,
+  },
+  deviceEstimateMonthly: {
+    color: '#4CAF50',
+    fontSize: 14,
+    fontWeight: 'bold',
+  },
+  confidenceText: {
+    color: '#999',
+    fontSize: 12,
+  },
   alertsCard: {
     backgroundColor: '#2a1a1a',
     padding: 20,
@@ -1587,7 +1303,6 @@ const styles = StyleSheet.create({
     backgroundColor: '#1a1a1a',
     padding: 16,
     borderRadius: 8,
-    alignItems: 'center',
     borderWidth: 1,
     borderColor: '#333',
   },
@@ -1595,6 +1310,11 @@ const styles = StyleSheet.create({
     color: '#4CAF50',
     fontSize: 16,
     fontWeight: '600',
+    marginBottom: 4,
+  },
+  actionButtonSubtext: {
+    color: '#999',
+    fontSize: 12,
   },
   // Device styles
   devicesList: {
@@ -1654,10 +1374,6 @@ const styles = StyleSheet.create({
     fontSize: 12,
     marginBottom: 2,
   },
-  confidenceText: {
-    color: '#999',
-    fontSize: 10,
-  },
   smartIntegration: {
     color: '#2196F3',
     fontSize: 12,
@@ -1691,22 +1407,6 @@ const styles = StyleSheet.create({
     color: '#999',
     fontSize: 10,
   },
-  templateTabs: {
-    flexDirection: 'row',
-    paddingHorizontal: 20,
-    paddingBottom: 16,
-  },
-  templateTab: {
-    backgroundColor: '#4CAF50',
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 20,
-  },
-  templateTabText: {
-    color: '#fff',
-    fontSize: 14,
-    fontWeight: '600',
-  },
   sectionTitle: {
     color: '#fff',
     fontSize: 18,
@@ -1737,11 +1437,5 @@ const styles = StyleSheet.create({
   scenarioStats: {
     color: '#999',
     fontSize: 12,
-  },
-  instructionText: {
-    color: '#999',
-    fontSize: 12,
-    marginBottom: 16,
-    lineHeight: 16,
   },
 });
