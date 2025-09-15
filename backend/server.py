@@ -1567,6 +1567,8 @@ async def create_device(property_id: str, device_data: dict, user_id: str = Depe
         
         await db.devices.insert_one(device_dict)
         
+        # Remove MongoDB _id field before returning
+        device_dict.pop("_id", None)
         return device_dict
         
     except HTTPException:
