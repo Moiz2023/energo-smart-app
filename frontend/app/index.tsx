@@ -14,6 +14,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { router } from 'expo-router';
+import { apiRequest } from '../utils/apiService';
 
 const BACKEND_URL = process.env.EXPO_PUBLIC_BACKEND_URL;
 
@@ -122,18 +123,12 @@ export default function Index() {
 
       console.log('Attempting authentication:', endpoint);
       
-      const response = await fetch(`${BACKEND_URL}${endpoint}`, {
+      const data: AuthResponse = await apiRequest<AuthResponse>(endpoint, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
         body: JSON.stringify(body),
-        
       });
-
-      const data: AuthResponse = await response.json();
       
-      if (response.ok) {
+      if (data) {
         console.log('Authentication successful');
         
         // Store authentication data
@@ -156,11 +151,13 @@ export default function Index() {
       } else {
         // Handle specific error cases
         if (response.status === 401) {
-          setLoginError('Invalid email or password. Please try again.');
+          setLoginError("Email ou mot de passe invalide. Veuillez réessayer.");
         } else if (response.status === 400) {
-          setLoginError(data.message || 'Please check your information and try again.');
+          setLoginError(data.message || "Veuillez vérifier vos informations et réessayer.");
+        } else if (response.status === 409) {
+          setLoginError("Cet email est déjà enregistré. Veuillez vous connecter ou utiliser un autre email.");
         } else {
-          setLoginError('Authentication failed. Please try again.');
+          setLoginError("Échec de l'authentification. Veuillez réessayer plus tard.");
         }
       }
     } catch (error) {
@@ -311,12 +308,12 @@ export default function Index() {
                   <View style={styles.buttonLoadingContainer}>
                     <ActivityIndicator color="#fff" size="small" />
                     <Text style={styles.authButtonText}>
-                      {isLogin ? 'Signing in...' : 'Creating account...'}
+                      {isLogin ? 'Connexion...' : 'Création de compte...'}
                     </Text>
                   </View>
                 ) : (
                   <Text style={styles.authButtonText}>
-                    {isLogin ? 'Sign In' : 'Create Account'}
+                    {isLogin ? 'Se connecter' : 'Créer un compte'}
                   </Text>
                 )}
               </TouchableOpacity>

@@ -16,7 +16,7 @@ import math
 from pathlib import Path
 import aiohttp
 import asyncio
-from emergentintegrations.llm.chat import LlmChat, UserMessage
+# from emergentintegrations.llm.chat import LlmChat, UserMessage
 
 # Import our new models and utilities
 import sys
@@ -45,7 +45,7 @@ client = AsyncIOMotorClient(mongo_url)
 db = client[os.environ['DB_NAME']]
 
 # JWT Configuration
-JWT_SECRET = "energo_secret_key_2024"
+JWT_SECRET = os.environ.get("JWT_SECRET", "super_secret_key_fallback_fallback_for_dev") # TODO: Change this in production")
 JWT_ALGORITHM = "HS256"
 security = HTTPBearer()
 
