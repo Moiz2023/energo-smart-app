@@ -1,1100 +1,1179 @@
-diff --git a/ai_chat_test.py b/ai_chat_test.py
-new file mode 100644
-index 0000000..89e8ca7
---- /dev/null
-+++ b/ai_chat_test.py
-@@ -0,0 +1,409 @@
-+#!/usr/bin/env python3
-+"""
-+AI Chat Testing Suite for Energo Smart Energy Management API
-+Testing specific user-reported issue: AI Chat not working
-+"""
-+
-+import requests
-+import json
-+import time
-+from datetime import datetime
-+import sys
-+import os
-+
-+# Get backend URL from frontend .env file
-+def get_backend_url():
-+    try:
-+        with open('/app/frontend/.env', 'r') as f:
-+            for line in f:
-+                if line.startswith('EXPO_PACKAGER_PROXY_URL='):
-+                    base_url = line.split('=')[1].strip().strip('"')
-+                    return f"{base_url}/api"
-+    except Exception as e:
-+        print(f"Error reading frontend .env: {e}")
-+    return "https://energo-reset.preview.emergentagent.com/api"
-+
-+BASE_URL = get_backend_url()
-+print(f"🤖 Testing AI Chat Endpoints at: {BASE_URL}")
-+print("Focus: AI Chat functionality - POST /api/ai-chat and GET /api/ai-chat/history")
-+print("=" * 70)
-+
-+# Demo user credentials
-+DEMO_USER = {
-+    "email": "demo@energo.com",
-+    "password": "password123"
-+}
-+
-+class AIChatTester:
-+    def __init__(self):
-+        self.base_url = BASE_URL
-+        self.session = requests.Session()
-+        self.auth_token = None
-+        self.user_id = None
-+        self.session_id = None
-+        self.results = {
-+            "total_tests": 0,
-+            "passed": 0,
-+            "failed": 0,
-+            "errors": [],
-+            "critical_failures": []
-+        }
-+
-+    def log_result(self, test_name, success, message="", is_critical=False):
-+        self.results["total_tests"] += 1
-+        if success:
-+            self.results["passed"] += 1
-+            print(f"✅ {test_name}: PASSED {message}")
-+        else:
-+            self.results["failed"] += 1
-+            print(f"❌ {test_name}: FAILED {message}")
-+            self.results["errors"].append(f"{test_name}: {message}")
-+            if is_critical:
-+                self.results["critical_failures"].append(test_name)
-+
-+    def authenticate(self):
-+        """Authenticate with demo user"""
-+        print("\n🔐 Authenticating Demo User...")
-+        
-+        try:
-+            response = self.session.post(
-+                f"{self.base_url}/auth/login",
-+                json=DEMO_USER,
-+                headers={"Content-Type": "application/json"},
-+                timeout=30
-+            )
-+            
-+            if response.status_code == 200:
-+                data = response.json()
-+                if "token" in data and "user" in data:
-+                    self.auth_token = data["token"]
-+                    self.user_id = data["user"]["id"]
-+                    self.session.headers.update({"Authorization": f"Bearer {self.auth_token}"})
-+                    self.log_result("Authentication", True, f"Logged in as {DEMO_USER['email']}")
-+                    return True
-+                else:
-+                    self.log_result("Authentication", False, "Missing token or user in response", is_critical=True)
-+            else:
-+                self.log_result("Authentication", False, f"Status: {response.status_code}, Response: {response.text}", is_critical=True)
-+                
-+        except Exception as e:
-+            self.log_result("Authentication", False, f"Exception: {str(e)}", is_critical=True)
-+        
-+        return False
-+
-+    def check_emergent_llm_key(self):
-+        """Check if EMERGENT_LLM_KEY is configured by testing a simple AI chat"""
-+        print("\n🔑 Checking EMERGENT_LLM_KEY Configuration...")
-+        
-+        if not self.auth_token:
-+            self.log_result("EMERGENT_LLM_KEY Check", False, "No authentication token", is_critical=True)
-+            return False
-+        
-+        test_message = {
-+            "message": "Hello, this is a test message to check if AI is working.",
-+            "session_id": None
-+        }
-+        
-+        try:
-+            response = self.session.post(
-+                f"{self.base_url}/ai-chat",
-+                json=test_message,
-+                headers={"Authorization": f"Bearer {self.auth_token}"},
-+                timeout=30
-+            )
-+            
-+            if response.status_code == 200:
-+                data = response.json()
-+                if "response" in data and "session_id" in data:
-+                    self.session_id = data["session_id"]
-+                    ai_response = data["response"]
-+                    self.log_result("EMERGENT_LLM_KEY Check", True, f"AI responded successfully. Session: {self.session_id}")
-+                    print(f"   AI Response: {ai_response[:100]}...")
-+                    return True
-+                else:
-+                    self.log_result("EMERGENT_LLM_KEY Check", False, "Missing response or session_id in response", is_critical=True)
-+            elif response.status_code == 500:
-+                error_text = response.text
-+                if "AI service unavailable" in error_text or "EMERGENT_LLM_KEY" in error_text:
-+                    self.log_result("EMERGENT_LLM_KEY Check", False, "EMERGENT_LLM_KEY not configured or AI service unavailable", is_critical=True)
-+                else:
-+                    self.log_result("EMERGENT_LLM_KEY Check", False, f"Server error: {error_text}", is_critical=True)
-+            else:
-+                self.log_result("EMERGENT_LLM_KEY Check", False, f"Status: {response.status_code}, Response: {response.text}", is_critical=True)
-+                
-+        except Exception as e:
-+            self.log_result("EMERGENT_LLM_KEY Check", False, f"Exception: {str(e)}", is_critical=True)
-+        
-+        return False
-+
-+    def test_ai_chat_conversation(self):
-+        """Test a full AI chat conversation with multiple messages"""
-+        print("\n💬 Testing AI Chat Conversation...")
-+        
-+        if not self.auth_token:
-+            self.log_result("AI Chat Conversation", False, "No authentication token", is_critical=True)
-+            return False
-+        
-+        # Test messages covering different energy topics
-+        test_messages = [
-+            "Can you help me reduce my energy consumption?",
-+            "What are the best energy-saving tips for a family home?",
-+            "Tell me about energy subsidies available in Brussels.",
-+            "How can I optimize my heating costs?",
-+            "What's the best time to use appliances to save money?"
-+        ]
-+        
-+        successful_messages = 0
-+        
-+        for i, message in enumerate(test_messages):
-+            print(f"\n   Testing message {i+1}: '{message[:50]}...'")
-+            
-+            chat_data = {
-+                "message": message,
-+                "session_id": self.session_id  # Use same session for continuity
-+            }
-+            
-+            try:
-+                response = self.session.post(
-+                    f"{self.base_url}/ai-chat",
-+                    json=chat_data,
-+                    headers={"Authorization": f"Bearer {self.auth_token}"},
-+                    timeout=30
-+                )
-+                
-+                if response.status_code == 200:
-+                    data = response.json()
-+                    if "response" in data:
-+                        ai_response = data["response"]
-+                        session_id = data.get("session_id", "N/A")
-+                        successful_messages += 1
-+                        print(f"   ✅ AI Response ({len(ai_response)} chars): {ai_response[:80]}...")
-+                        print(f"   Session ID: {session_id}")
-+                        
-+                        # Update session ID for continuity
-+                        if session_id != "N/A":
-+                            self.session_id = session_id
-+                    else:
-+                        print(f"   ❌ Missing response in data: {data}")
-+                else:
-+                    print(f"   ❌ Status: {response.status_code}, Response: {response.text[:200]}")
-+                    
-+            except Exception as e:
-+                print(f"   ❌ Exception: {str(e)}")
-+        
-+        success_rate = (successful_messages / len(test_messages)) * 100
-+        if successful_messages == len(test_messages):
-+            self.log_result("AI Chat Conversation", True, f"All {successful_messages} messages successful (100%)")
-+            return True
-+        elif successful_messages > 0:
-+            self.log_result("AI Chat Conversation", False, f"Only {successful_messages}/{len(test_messages)} messages successful ({success_rate:.1f}%)")
-+        else:
-+            self.log_result("AI Chat Conversation", False, "No messages were successful", is_critical=True)
-+        
-+        return False
-+
-+    def test_chat_history(self):
-+        """Test GET /api/ai-chat/history endpoint"""
-+        print("\n📜 Testing Chat History Retrieval...")
-+        
-+        if not self.auth_token:
-+            self.log_result("Chat History", False, "No authentication token")
-+            return False
-+        
-+        try:
-+            # Test getting all chat history
-+            response = self.session.get(
-+                f"{self.base_url}/ai-chat/history",
-+                headers={"Authorization": f"Bearer {self.auth_token}"},
-+                timeout=30
-+            )
-+            
-+            if response.status_code == 200:
-+                data = response.json()
-+                if "chat_history" in data:
-+                    history = data["chat_history"]
-+                    self.log_result("Chat History", True, f"Retrieved {len(history)} chat history items")
-+                    
-+                    # Show sample history items
-+                    for i, item in enumerate(history[:3]):  # Show first 3 items
-+                        print(f"   History {i+1}: {item.get('message', 'N/A')[:50]}...")
-+                        print(f"      Response: {item.get('response', 'N/A')[:50]}...")
-+                        print(f"      Session: {item.get('session_id', 'N/A')}")
-+                        print(f"      Timestamp: {item.get('timestamp', 'N/A')}")
-+                    
-+                    # Test getting history for specific session
-+                    if self.session_id:
-+                        print(f"\n   Testing history for session {self.session_id}...")
-+                        session_response = self.session.get(
-+                            f"{self.base_url}/ai-chat/history?session_id={self.session_id}",
-+                            headers={"Authorization": f"Bearer {self.auth_token}"},
-+                            timeout=30
-+                        )
-+                        
-+                        if session_response.status_code == 200:
-+                            session_data = session_response.json()
-+                            session_history = session_data.get("chat_history", [])
-+                            print(f"   ✅ Session-specific history: {len(session_history)} items")
-+                        else:
-+                            print(f"   ❌ Session history failed: {session_response.status_code}")
-+                    
-+                    return True
-+                else:
-+                    self.log_result("Chat History", False, "Missing chat_history in response")
-+            else:
-+                self.log_result("Chat History", False, f"Status: {response.status_code}, Response: {response.text}")
-+                
-+        except Exception as e:
-+            self.log_result("Chat History", False, f"Exception: {str(e)}")
-+        
-+        return False
-+
-+    def test_premium_features(self):
-+        """Test premium AI chat features"""
-+        print("\n💎 Testing Premium AI Chat Features...")
-+        
-+        if not self.auth_token:
-+            self.log_result("Premium Features", False, "No authentication token")
-+            return False
-+        
-+        # First check user's subscription status
-+        try:
-+            settings_response = self.session.get(
-+                f"{self.base_url}/settings",
-+                headers={"Authorization": f"Bearer {self.auth_token}"},
-+                timeout=30
-+            )
-+            
-+            if settings_response.status_code == 200:
-+                settings_data = settings_response.json()
-+                subscription_plan = settings_data.get("settings", {}).get("subscription_plan", "free")
-+                print(f"   User subscription: {subscription_plan}")
-+                
-+                # Test premium-specific AI features
-+                premium_message = {
-+                    "message": "Can you provide real-time energy data and advanced analysis for my consumption patterns?",
-+                    "session_id": self.session_id
-+                }
-+                
-+                response = self.session.post(
-+                    f"{self.base_url}/ai-chat",
-+                    json=premium_message,
-+                    headers={"Authorization": f"Bearer {self.auth_token}"},
-+                    timeout=30
-+                )
-+                
-+                if response.status_code == 200:
-+                    data = response.json()
-+                    ai_response = data.get("response", "")
-+                    
-+                    # Check if response includes premium features
-+                    has_real_time_data = "real-time" in ai_response.lower() or "fluvius" in ai_response.lower()
-+                    has_advanced_analysis = len(ai_response) > 200  # Premium responses should be more detailed
-+                    
-+                    if subscription_plan == "premium" and (has_real_time_data or has_advanced_analysis):
-+                        self.log_result("Premium Features", True, f"Premium AI features working (subscription: {subscription_plan})")
-+                        print(f"   Premium response length: {len(ai_response)} chars")
-+                    elif subscription_plan == "free":
-+                        self.log_result("Premium Features", True, f"Free tier working correctly (subscription: {subscription_plan})")
-+                    else:
-+                        self.log_result("Premium Features", False, f"Premium features not working as expected (subscription: {subscription_plan})")
-+                else:
-+                    self.log_result("Premium Features", False, f"Premium message failed: {response.status_code}")
-+            else:
-+                self.log_result("Premium Features", False, f"Could not get user settings: {settings_response.status_code}")
-+                
-+        except Exception as e:
-+            self.log_result("Premium Features", False, f"Exception: {str(e)}")
-+
-+    def run_all_tests(self):
-+        """Run all AI chat tests"""
-+        print("🎯 FOCUS: Testing AI Chat Functionality")
-+        print("This addresses the user's issue: 'AI Chat not working'")
-+        print()
-+        
-+        # Test 1: Authentication (CRITICAL)
-+        auth_success = self.authenticate()
-+        if not auth_success:
-+            print("\n❌ CRITICAL FAILURE: Cannot proceed without authentication")
-+            return self.results
-+        
-+        # Test 2: Check EMERGENT_LLM_KEY configuration (CRITICAL)
-+        key_configured = self.check_emergent_llm_key()
-+        
-+        # Test 3: Full conversation test
-+        if key_configured:
-+            self.test_ai_chat_conversation()
-+            
-+            # Test 4: Chat history
-+            self.test_chat_history()
-+            
-+            # Test 5: Premium features
-+            self.test_premium_features()
-+        else:
-+            print("\n⚠️  Skipping conversation tests due to AI service unavailability")
-+        
-+        # Generate summary
-+        self.print_summary()
-+        
-+        return self.results
-+
-+    def print_summary(self):
-+        """Print test summary"""
-+        print("\n" + "=" * 70)
-+        print("📊 AI CHAT TEST SUMMARY")
-+        print("=" * 70)
-+        
-+        passed = self.results["passed"]
-+        total = self.results["total_tests"]
-+        success_rate = (passed/total)*100 if total > 0 else 0
-+        
-+        print(f"Tests Passed: {passed}/{total}")
-+        print(f"Success Rate: {success_rate:.1f}%")
-+        print()
-+        
-+        # Critical analysis
-+        print("🔍 AI CHAT ISSUE ANALYSIS:")
-+        print("User Issue: 'AI Chat not working'")
-+        print()
-+        
-+        key_failed = "EMERGENT_LLM_KEY Check" in self.results["critical_failures"]
-+        auth_failed = "Authentication" in self.results["critical_failures"]
-+        
-+        if auth_failed:
-+            print("❌ ROOT CAUSE: Demo user authentication is failing")
-+            print("   SOLUTION: Fix demo user credentials or login endpoint")
-+        elif key_failed:
-+            print("❌ ROOT CAUSE: EMERGENT_LLM_KEY is not configured or AI service is unavailable")
-+            print("   SOLUTION: Configure EMERGENT_LLM_KEY environment variable in backend")
-+            print("   DETAILS: The AI chat endpoints exist but cannot connect to the LLM service")
-+        elif passed == total:
-+            print("✅ ISSUE RESOLVED: AI Chat is working correctly!")
-+            print("   Users can now use the AI chat feature successfully")
-+            print("   Both chat messaging and history retrieval are functional")
-+        else:
-+            print("⚠️  PARTIAL SUCCESS: Some AI chat features working, some failing")
-+            print("   Review individual test results above for specific issues")
-+        
-+        print()
-+        
-+        if self.results["errors"]:
-+            print("🐛 DETAILED ERRORS:")
-+            for error in self.results["errors"]:
-+                print(f"  • {error}")
-+
-+def main():
-+    """Main test execution"""
-+    tester = AIChatTester()
-+    results = tester.run_all_tests()
-+    
-+    # Return appropriate exit code
-+    critical_failures = len(results["critical_failures"])
-+    if critical_failures == 0:
-+        print("\n🎉 All critical AI chat tests passed!")
-+        sys.exit(0)
-+    else:
-+        print(f"\n❌ {critical_failures} critical AI chat test(s) failed")
-+        sys.exit(1)
-+
-+if __name__ == "__main__":
-+    main()
-\ No newline at end of file
-diff --git a/device_test.py b/device_test.py
-new file mode 100644
-index 0000000..28c72a8
---- /dev/null
-+++ b/device_test.py
-@@ -0,0 +1,410 @@
-+#!/usr/bin/env python3
-+"""
-+Device Management Testing Suite for Energo Smart Energy Management API
-+Testing specific user-reported issue: Cannot add new equipment/devices
-+"""
-+
-+import requests
-+import json
-+import time
-+from datetime import datetime
-+import sys
-+import os
-+
-+# Get backend URL from frontend .env file
-+def get_backend_url():
-+    try:
-+        with open('/app/frontend/.env', 'r') as f:
-+            for line in f:
-+                if line.startswith('EXPO_PACKAGER_PROXY_URL='):
-+                    base_url = line.split('=')[1].strip().strip('"')
-+                    return f"{base_url}/api"
-+    except Exception as e:
-+        print(f"Error reading frontend .env: {e}")
-+    return "https://energo-reset.preview.emergentagent.com/api"
-+
-+BASE_URL = get_backend_url()
-+print(f"⚡ Testing Device Management Endpoints at: {BASE_URL}")
-+print("Focus: Device creation and management - Cannot add new equipment/devices")
-+print("=" * 70)
-+
-+# Demo user credentials
-+DEMO_USER = {
-+    "email": "demo@energo.com",
-+    "password": "password123"
-+}
-+
-+class DeviceManagementTester:
-+    def __init__(self):
-+        self.base_url = BASE_URL
-+        self.session = requests.Session()
-+        self.auth_token = None
-+        self.user_id = None
-+        self.test_property_id = None
-+        self.results = {
-+            "total_tests": 0,
-+            "passed": 0,
-+            "failed": 0,
-+            "errors": [],
-+            "critical_failures": []
-+        }
-+
-+    def log_result(self, test_name, success, message="", is_critical=False):
-+        self.results["total_tests"] += 1
-+        if success:
-+            self.results["passed"] += 1
-+            print(f"✅ {test_name}: PASSED {message}")
-+        else:
-+            self.results["failed"] += 1
-+            print(f"❌ {test_name}: FAILED {message}")
-+            self.results["errors"].append(f"{test_name}: {message}")
-+            if is_critical:
-+                self.results["critical_failures"].append(test_name)
-+
-+    def authenticate(self):
-+        """Authenticate with demo user"""
-+        print("\n🔐 Authenticating Demo User...")
-+        
-+        try:
-+            response = self.session.post(
-+                f"{self.base_url}/auth/login",
-+                json=DEMO_USER,
-+                headers={"Content-Type": "application/json"},
-+                timeout=30
-+            )
-+            
-+            if response.status_code == 200:
-+                data = response.json()
-+                if "token" in data and "user" in data:
-+                    self.auth_token = data["token"]
-+                    self.user_id = data["user"]["id"]
-+                    self.session.headers.update({"Authorization": f"Bearer {self.auth_token}"})
-+                    self.log_result("Authentication", True, f"Logged in as {DEMO_USER['email']}")
-+                    return True
-+                else:
-+                    self.log_result("Authentication", False, "Missing token or user in response", is_critical=True)
-+            else:
-+                self.log_result("Authentication", False, f"Status: {response.status_code}, Response: {response.text}", is_critical=True)
-+                
-+        except Exception as e:
-+            self.log_result("Authentication", False, f"Exception: {str(e)}", is_critical=True)
-+        
-+        return False
-+
-+    def get_device_templates(self):
-+        """Test GET /api/device-templates endpoint"""
-+        print("\n🔧 Testing Device Templates...")
-+        
-+        try:
-+            response = self.session.get(
-+                f"{self.base_url}/device-templates",
-+                timeout=30
-+            )
-+            
-+            if response.status_code == 200:
-+                data = response.json()
-+                common_devices = data.get("common_devices", [])
-+                all_templates = data.get("all_templates", [])
-+                by_category = data.get("by_category", {})
-+                
-+                self.log_result("Get Device Templates", True, 
-+                              f"Found {len(common_devices)} common devices, {len(all_templates)} total templates, {len(by_category)} categories")
-+                
-+                # Show sample devices
-+                print("   Sample Common Devices:")
-+                for i, device in enumerate(common_devices[:5]):
-+                    print(f"     {i+1}. {device.get('name', 'Unknown')} ({device.get('device_type', 'N/A')})")
-+                    print(f"        Power: {device.get('power_rating_watts', 'N/A')}W, Usage: {device.get('daily_usage_hours', 'N/A')}h/day")
-+                
-+                return common_devices, all_templates
-+            else:
-+                self.log_result("Get Device Templates", False, f"Status: {response.status_code}, Response: {response.text}", is_critical=True)
-+                
-+        except Exception as e:
-+            self.log_result("Get Device Templates", False, f"Exception: {str(e)}", is_critical=True)
-+        
-+        return [], []
-+
-+    def get_user_properties(self):
-+        """Get user properties to test device creation"""
-+        print("\n🏠 Getting User Properties...")
-+        
-+        if not self.auth_token:
-+            self.log_result("Get User Properties", False, "No authentication token", is_critical=True)
-+            return []
-+        
-+        try:
-+            response = self.session.get(
-+                f"{self.base_url}/properties",
-+                headers={"Authorization": f"Bearer {self.auth_token}"},
-+                timeout=30
-+            )
-+            
-+            if response.status_code == 200:
-+                data = response.json()
-+                properties = data.get("properties", [])
-+                
-+                if len(properties) > 0:
-+                    self.test_property_id = properties[0].get("id")
-+                    self.log_result("Get User Properties", True, f"Found {len(properties)} properties. Using property: {self.test_property_id}")
-+                    
-+                    # Show property details
-+                    for i, prop in enumerate(properties[:3]):
-+                        print(f"   Property {i+1}: {prop.get('name', 'Unknown')} (ID: {prop.get('id', 'N/A')})")
-+                        print(f"      Address: {prop.get('address', 'N/A')}")
-+                        print(f"      Type: {prop.get('property_type', 'N/A')}, Size: {prop.get('size_m2', 'N/A')} m²")
-+                    
-+                    return properties
-+                else:
-+                    self.log_result("Get User Properties", False, "No properties found for user", is_critical=True)
-+            else:
-+                self.log_result("Get User Properties", False, f"Status: {response.status_code}, Response: {response.text}", is_critical=True)
-+                
-+        except Exception as e:
-+            self.log_result("Get User Properties", False, f"Exception: {str(e)}", is_critical=True)
-+        
-+        return []
-+
-+    def test_add_device_to_property(self, device_templates):
-+        """Test POST /api/properties/{property_id}/devices endpoint"""
-+        print(f"\n⚡ Testing Add Device to Property {self.test_property_id}...")
-+        
-+        if not self.test_property_id:
-+            self.log_result("Add Device to Property", False, "No test property available", is_critical=True)
-+            return False
-+        
-+        if not device_templates:
-+            self.log_result("Add Device to Property", False, "No device templates available", is_critical=True)
-+            return False
-+        
-+        # Test adding multiple devices
-+        successful_devices = 0
-+        test_devices = device_templates[:3]  # Test first 3 devices
-+        
-+        for i, template in enumerate(test_devices):
-+            device_name = f"Test {template.get('name', 'Device')} {i+1}"
-+            print(f"\n   Testing device {i+1}: {device_name}")
-+            
-+            device_data = {
-+                "template_id": template.get("id"),
-+                "name": device_name,
-+                "location": f"Test Room {i+1}",
-+                "custom_power_rating": template.get("power_rating_watts"),
-+                "custom_usage_hours": template.get("daily_usage_hours")
-+            }
-+            
-+            try:
-+                response = self.session.post(
-+                    f"{self.base_url}/properties/{self.test_property_id}/devices",
-+                    json=device_data,
-+                    headers={"Authorization": f"Bearer {self.auth_token}"},
-+                    timeout=30
-+                )
-+                
-+                if response.status_code == 200 or response.status_code == 201:
-+                    data = response.json()
-+                    device_id = data.get("device_id")
-+                    if device_id:
-+                        successful_devices += 1
-+                        print(f"   ✅ Device created successfully: {device_id}")
-+                        print(f"      Name: {device_name}")
-+                        print(f"      Template: {template.get('name', 'Unknown')}")
-+                    else:
-+                        print(f"   ❌ No device_id in response: {data}")
-+                else:
-+                    print(f"   ❌ Status: {response.status_code}, Response: {response.text}")
-+                    
-+            except Exception as e:
-+                print(f"   ❌ Exception: {str(e)}")
-+        
-+        success_rate = (successful_devices / len(test_devices)) * 100
-+        if successful_devices == len(test_devices):
-+            self.log_result("Add Device to Property", True, f"All {successful_devices} devices created successfully (100%)")
-+            return True
-+        elif successful_devices > 0:
-+            self.log_result("Add Device to Property", False, f"Only {successful_devices}/{len(test_devices)} devices created ({success_rate:.1f}%)")
-+        else:
-+            self.log_result("Add Device to Property", False, "No devices were created successfully", is_critical=True)
-+        
-+        return False
-+
-+    def test_get_property_devices(self):
-+        """Test GET /api/properties/{property_id}/devices endpoint"""
-+        print(f"\n📋 Testing Get Property Devices for {self.test_property_id}...")
-+        
-+        if not self.test_property_id:
-+            self.log_result("Get Property Devices", False, "No test property available")
-+            return False
-+        
-+        try:
-+            response = self.session.get(
-+                f"{self.base_url}/properties/{self.test_property_id}/devices",
-+                headers={"Authorization": f"Bearer {self.auth_token}"},
-+                timeout=30
-+            )
-+            
-+            if response.status_code == 200:
-+                data = response.json()
-+                devices = data.get("devices", [])
-+                
-+                if len(devices) > 0:
-+                    self.log_result("Get Property Devices", True, f"Found {len(devices)} devices in property")
-+                    
-+                    # Show device details
-+                    print("   Property Devices:")
-+                    for i, device in enumerate(devices[:5]):  # Show first 5 devices
-+                        print(f"     {i+1}. {device.get('name', 'Unknown')} ({device.get('device_type', 'N/A')})")
-+                        print(f"        ID: {device.get('id', 'N/A')}")
-+                        print(f"        Location: {device.get('location', 'N/A')}")
-+                        print(f"        Power: {device.get('power_rating_watts', 'N/A')}W")
-+                        print(f"        Usage: {device.get('daily_usage_hours', 'N/A')}h/day")
-+                    
-+                    return True
-+                else:
-+                    self.log_result("Get Property Devices", False, "No devices found in property")
-+            else:
-+                self.log_result("Get Property Devices", False, f"Status: {response.status_code}, Response: {response.text}")
-+                
-+        except Exception as e:
-+            self.log_result("Get Property Devices", False, f"Exception: {str(e)}")
-+        
-+        return False
-+
-+    def test_device_categories(self):
-+        """Test device templates by category"""
-+        print("\n📂 Testing Device Categories...")
-+        
-+        try:
-+            response = self.session.get(
-+                f"{self.base_url}/device-templates",
-+                timeout=30
-+            )
-+            
-+            if response.status_code == 200:
-+                data = response.json()
-+                by_category = data.get("by_category", {})
-+                
-+                if by_category:
-+                    self.log_result("Device Categories", True, f"Found {len(by_category)} device categories")
-+                    
-+                    # Show categories and device counts
-+                    print("   Device Categories:")
-+                    for category, devices in by_category.items():
-+                        print(f"     {category}: {len(devices)} devices")
-+                        # Show sample devices in category
-+                        for device in devices[:2]:  # Show first 2 devices per category
-+                            print(f"       - {device.get('name', 'Unknown')} ({device.get('power_rating_watts', 'N/A')}W)")
-+                    
-+                    return True
-+                else:
-+                    self.log_result("Device Categories", False, "No device categories found")
-+            else:
-+                self.log_result("Device Categories", False, f"Status: {response.status_code}")
-+                
-+        except Exception as e:
-+            self.log_result("Device Categories", False, f"Exception: {str(e)}")
-+        
-+        return False
-+
-+    def run_all_tests(self):
-+        """Run all device management tests"""
-+        print("🎯 FOCUS: Testing Device Management Functionality")
-+        print("This addresses the user's issue: 'Cannot add new equipment/devices'")
-+        print()
-+        
-+        # Test 1: Authentication (CRITICAL)
-+        auth_success = self.authenticate()
-+        if not auth_success:
-+            print("\n❌ CRITICAL FAILURE: Cannot proceed without authentication")
-+            return self.results
-+        
-+        # Test 2: Get device templates (CRITICAL)
-+        common_devices, all_templates = self.get_device_templates()
-+        
-+        # Test 3: Get device categories
-+        self.test_device_categories()
-+        
-+        # Test 4: Get user properties (CRITICAL)
-+        properties = self.get_user_properties()
-+        
-+        # Test 5: Add devices to property (CRITICAL)
-+        if properties and common_devices:
-+            self.test_add_device_to_property(common_devices)
-+            
-+            # Test 6: Get property devices
-+            self.test_get_property_devices()
-+        else:
-+            print("\n⚠️  Skipping device creation tests due to missing properties or templates")
-+        
-+        # Generate summary
-+        self.print_summary()
-+        
-+        return self.results
-+
-+    def print_summary(self):
-+        """Print test summary"""
-+        print("\n" + "=" * 70)
-+        print("📊 DEVICE MANAGEMENT TEST SUMMARY")
-+        print("=" * 70)
-+        
-+        passed = self.results["passed"]
-+        total = self.results["total_tests"]
-+        success_rate = (passed/total)*100 if total > 0 else 0
-+        
-+        print(f"Tests Passed: {passed}/{total}")
-+        print(f"Success Rate: {success_rate:.1f}%")
-+        print()
-+        
-+        # Critical analysis
-+        print("🔍 DEVICE MANAGEMENT ISSUE ANALYSIS:")
-+        print("User Issue: 'Cannot add new equipment/devices'")
-+        print()
-+        
-+        auth_failed = "Authentication" in self.results["critical_failures"]
-+        templates_failed = "Get Device Templates" in self.results["critical_failures"]
-+        properties_failed = "Get User Properties" in self.results["critical_failures"]
-+        add_device_failed = "Add Device to Property" in self.results["critical_failures"]
-+        
-+        if auth_failed:
-+            print("❌ ROOT CAUSE: Demo user authentication is failing")
-+            print("   SOLUTION: Fix demo user credentials or login endpoint")
-+        elif templates_failed:
-+            print("❌ ROOT CAUSE: Device templates are not available")
-+            print("   SOLUTION: Fix device templates endpoint or ensure templates are loaded")
-+        elif properties_failed:
-+            print("❌ ROOT CAUSE: User has no properties to add devices to")
-+            print("   SOLUTION: Ensure users can create properties first")
-+        elif add_device_failed:
-+            print("❌ ROOT CAUSE: Device creation endpoint is failing")
-+            print("   SOLUTION: Fix POST /api/properties/{property_id}/devices endpoint")
-+        elif passed == total:
-+            print("✅ ISSUE RESOLVED: Device management is working correctly!")
-+            print("   Users can now add new equipment/devices to their properties")
-+            print("   Device templates are available and device creation is functional")
-+        else:
-+            print("⚠️  PARTIAL SUCCESS: Some device management features working, some failing")
-+            print("   Review individual test results above for specific issues")
-+        
-+        print()
-+        
-+        if self.results["errors"]:
-+            print("🐛 DETAILED ERRORS:")
-+            for error in self.results["errors"]:
-+                print(f"  • {error}")
-+
-+def main():
-+    """Main test execution"""
-+    tester = DeviceManagementTester()
-+    results = tester.run_all_tests()
-+    
-+    # Return appropriate exit code
-+    critical_failures = len(results["critical_failures"])
-+    if critical_failures == 0:
-+        print("\n🎉 All critical device management tests passed!")
-+        sys.exit(0)
-+    else:
-+        print(f"\n❌ {critical_failures} critical device management test(s) failed")
-+        sys.exit(1)
-+
-+if __name__ == "__main__":
-+    main()
-\ No newline at end of file
 diff --git a/model.patch b/model.patch
-index 6b6c020..8d3ef61 100644
+index f23825a..e69de29 100644
 --- a/model.patch
 +++ b/model.patch
-@@ -1,208 +0,0 @@
--diff --git a/backend/server.py b/backend/server.py
--index 9866b03..f610d70 100644
----- a/backend/server.py
--+++ b/backend/server.py
--@@ -1516,7 +1516,15 @@ async def create_property(property_data: dict, user_id: str = Depends(get_curren
--         
--         await db.properties.insert_one(property_dict)
--         
---        return property_dict
--+        # Return property_id and clean response without MongoDB _id
--+        response_dict = property_dict.copy()
--+        response_dict.pop("_id", None)  # Remove _id if it exists
--+        
--+        return {
--+            "property_id": property_dict["id"],
--+            "message": "Property created successfully",
--+            "property": response_dict
+@@ -1,1100 +0,0 @@
+-diff --git a/ai_chat_test.py b/ai_chat_test.py
+-new file mode 100644
+-index 0000000..89e8ca7
+---- /dev/null
+-+++ b/ai_chat_test.py
+-@@ -0,0 +1,409 @@
+-+#!/usr/bin/env python3
+-+"""
+-+AI Chat Testing Suite for Energo Smart Energy Management API
+-+Testing specific user-reported issue: AI Chat not working
+-+"""
+-+
+-+import requests
+-+import json
+-+import time
+-+from datetime import datetime
+-+import sys
+-+import os
+-+
+-+# Get backend URL from frontend .env file
+-+def get_backend_url():
+-+    try:
+-+        with open('/app/frontend/.env', 'r') as f:
+-+            for line in f:
+-+                if line.startswith('EXPO_PACKAGER_PROXY_URL='):
+-+                    base_url = line.split('=')[1].strip().strip('"')
+-+                    return f"{base_url}/api"
+-+    except Exception as e:
+-+        print(f"Error reading frontend .env: {e}")
+-+    return "https://energo-reset.preview.emergentagent.com/api"
+-+
+-+BASE_URL = get_backend_url()
+-+print(f"🤖 Testing AI Chat Endpoints at: {BASE_URL}")
+-+print("Focus: AI Chat functionality - POST /api/ai-chat and GET /api/ai-chat/history")
+-+print("=" * 70)
+-+
+-+# Demo user credentials
+-+DEMO_USER = {
+-+    "email": "demo@energo.com",
+-+    "password": "password123"
+-+}
+-+
+-+class AIChatTester:
+-+    def __init__(self):
+-+        self.base_url = BASE_URL
+-+        self.session = requests.Session()
+-+        self.auth_token = None
+-+        self.user_id = None
+-+        self.session_id = None
+-+        self.results = {
+-+            "total_tests": 0,
+-+            "passed": 0,
+-+            "failed": 0,
+-+            "errors": [],
+-+            "critical_failures": []
 -+        }
--     except Exception as e:
--         raise HTTPException(status_code=500, detail=f"Failed to create property: {str(e)}")
-- 
--@@ -1525,13 +1533,14 @@ async def get_user_properties(user_id: str = Depends(get_current_user)):
--     """Get all properties for the current user"""
--     try:
--         if not PROPERTY_MANAGEMENT_ENABLED:
---            return []
--+            return {"properties": []}
--         
--         properties = list(await db.properties.find(
---            {"user_id": user_id, "active": True}
--+            {"user_id": user_id, "active": True},
--+            {"_id": 0}  # Exclude MongoDB _id field to avoid ObjectId serialization issues
--         ).sort("created_at", -1).to_list(length=100))
--         
---        return properties
--+        return {"properties": properties}
--     except Exception as e:
--         raise HTTPException(status_code=500, detail=f"Failed to fetch properties: {str(e)}")
-- 
--@@ -1573,21 +1582,23 @@ async def get_property_devices(property_id: str, user_id: str = Depends(get_curr
--     """Get all devices for a property"""
--     try:
--         if not PROPERTY_MANAGEMENT_ENABLED:
---            return []
--+            return {"devices": []}
--         
--         # Verify property belongs to user
--         property_doc = await db.properties.find_one(
---            {"id": property_id, "user_id": user_id, "active": True}
--+            {"id": property_id, "user_id": user_id, "active": True},
--+            {"_id": 0}  # Exclude MongoDB _id field
--         )
--         
--         if not property_doc:
--             raise HTTPException(status_code=404, detail="Property not found")
--         
--         devices = list(await db.devices.find(
---            {"property_id": property_id, "user_id": user_id, "active": True}
--+            {"property_id": property_id, "user_id": user_id, "active": True},
--+            {"_id": 0}  # Exclude MongoDB _id field to avoid ObjectId serialization issues
--         ).sort("created_at", -1).to_list(length=1000))
--         
---        return devices
--+        return {"devices": devices}
--         
--     except HTTPException:
--         raise
+-+
+-+    def log_result(self, test_name, success, message="", is_critical=False):
+-+        self.results["total_tests"] += 1
+-+        if success:
+-+            self.results["passed"] += 1
+-+            print(f"✅ {test_name}: PASSED {message}")
+-+        else:
+-+            self.results["failed"] += 1
+-+            print(f"❌ {test_name}: FAILED {message}")
+-+            self.results["errors"].append(f"{test_name}: {message}")
+-+            if is_critical:
+-+                self.results["critical_failures"].append(test_name)
+-+
+-+    def authenticate(self):
+-+        """Authenticate with demo user"""
+-+        print("\n🔐 Authenticating Demo User...")
+-+        
+-+        try:
+-+            response = self.session.post(
+-+                f"{self.base_url}/auth/login",
+-+                json=DEMO_USER,
+-+                headers={"Content-Type": "application/json"},
+-+                timeout=30
+-+            )
+-+            
+-+            if response.status_code == 200:
+-+                data = response.json()
+-+                if "token" in data and "user" in data:
+-+                    self.auth_token = data["token"]
+-+                    self.user_id = data["user"]["id"]
+-+                    self.session.headers.update({"Authorization": f"Bearer {self.auth_token}"})
+-+                    self.log_result("Authentication", True, f"Logged in as {DEMO_USER['email']}")
+-+                    return True
+-+                else:
+-+                    self.log_result("Authentication", False, "Missing token or user in response", is_critical=True)
+-+            else:
+-+                self.log_result("Authentication", False, f"Status: {response.status_code}, Response: {response.text}", is_critical=True)
+-+                
+-+        except Exception as e:
+-+            self.log_result("Authentication", False, f"Exception: {str(e)}", is_critical=True)
+-+        
+-+        return False
+-+
+-+    def check_emergent_llm_key(self):
+-+        """Check if EMERGENT_LLM_KEY is configured by testing a simple AI chat"""
+-+        print("\n🔑 Checking EMERGENT_LLM_KEY Configuration...")
+-+        
+-+        if not self.auth_token:
+-+            self.log_result("EMERGENT_LLM_KEY Check", False, "No authentication token", is_critical=True)
+-+            return False
+-+        
+-+        test_message = {
+-+            "message": "Hello, this is a test message to check if AI is working.",
+-+            "session_id": None
+-+        }
+-+        
+-+        try:
+-+            response = self.session.post(
+-+                f"{self.base_url}/ai-chat",
+-+                json=test_message,
+-+                headers={"Authorization": f"Bearer {self.auth_token}"},
+-+                timeout=30
+-+            )
+-+            
+-+            if response.status_code == 200:
+-+                data = response.json()
+-+                if "response" in data and "session_id" in data:
+-+                    self.session_id = data["session_id"]
+-+                    ai_response = data["response"]
+-+                    self.log_result("EMERGENT_LLM_KEY Check", True, f"AI responded successfully. Session: {self.session_id}")
+-+                    print(f"   AI Response: {ai_response[:100]}...")
+-+                    return True
+-+                else:
+-+                    self.log_result("EMERGENT_LLM_KEY Check", False, "Missing response or session_id in response", is_critical=True)
+-+            elif response.status_code == 500:
+-+                error_text = response.text
+-+                if "AI service unavailable" in error_text or "EMERGENT_LLM_KEY" in error_text:
+-+                    self.log_result("EMERGENT_LLM_KEY Check", False, "EMERGENT_LLM_KEY not configured or AI service unavailable", is_critical=True)
+-+                else:
+-+                    self.log_result("EMERGENT_LLM_KEY Check", False, f"Server error: {error_text}", is_critical=True)
+-+            else:
+-+                self.log_result("EMERGENT_LLM_KEY Check", False, f"Status: {response.status_code}, Response: {response.text}", is_critical=True)
+-+                
+-+        except Exception as e:
+-+            self.log_result("EMERGENT_LLM_KEY Check", False, f"Exception: {str(e)}", is_critical=True)
+-+        
+-+        return False
+-+
+-+    def test_ai_chat_conversation(self):
+-+        """Test a full AI chat conversation with multiple messages"""
+-+        print("\n💬 Testing AI Chat Conversation...")
+-+        
+-+        if not self.auth_token:
+-+            self.log_result("AI Chat Conversation", False, "No authentication token", is_critical=True)
+-+            return False
+-+        
+-+        # Test messages covering different energy topics
+-+        test_messages = [
+-+            "Can you help me reduce my energy consumption?",
+-+            "What are the best energy-saving tips for a family home?",
+-+            "Tell me about energy subsidies available in Brussels.",
+-+            "How can I optimize my heating costs?",
+-+            "What's the best time to use appliances to save money?"
+-+        ]
+-+        
+-+        successful_messages = 0
+-+        
+-+        for i, message in enumerate(test_messages):
+-+            print(f"\n   Testing message {i+1}: '{message[:50]}...'")
+-+            
+-+            chat_data = {
+-+                "message": message,
+-+                "session_id": self.session_id  # Use same session for continuity
+-+            }
+-+            
+-+            try:
+-+                response = self.session.post(
+-+                    f"{self.base_url}/ai-chat",
+-+                    json=chat_data,
+-+                    headers={"Authorization": f"Bearer {self.auth_token}"},
+-+                    timeout=30
+-+                )
+-+                
+-+                if response.status_code == 200:
+-+                    data = response.json()
+-+                    if "response" in data:
+-+                        ai_response = data["response"]
+-+                        session_id = data.get("session_id", "N/A")
+-+                        successful_messages += 1
+-+                        print(f"   ✅ AI Response ({len(ai_response)} chars): {ai_response[:80]}...")
+-+                        print(f"   Session ID: {session_id}")
+-+                        
+-+                        # Update session ID for continuity
+-+                        if session_id != "N/A":
+-+                            self.session_id = session_id
+-+                    else:
+-+                        print(f"   ❌ Missing response in data: {data}")
+-+                else:
+-+                    print(f"   ❌ Status: {response.status_code}, Response: {response.text[:200]}")
+-+                    
+-+            except Exception as e:
+-+                print(f"   ❌ Exception: {str(e)}")
+-+        
+-+        success_rate = (successful_messages / len(test_messages)) * 100
+-+        if successful_messages == len(test_messages):
+-+            self.log_result("AI Chat Conversation", True, f"All {successful_messages} messages successful (100%)")
+-+            return True
+-+        elif successful_messages > 0:
+-+            self.log_result("AI Chat Conversation", False, f"Only {successful_messages}/{len(test_messages)} messages successful ({success_rate:.1f}%)")
+-+        else:
+-+            self.log_result("AI Chat Conversation", False, "No messages were successful", is_critical=True)
+-+        
+-+        return False
+-+
+-+    def test_chat_history(self):
+-+        """Test GET /api/ai-chat/history endpoint"""
+-+        print("\n📜 Testing Chat History Retrieval...")
+-+        
+-+        if not self.auth_token:
+-+            self.log_result("Chat History", False, "No authentication token")
+-+            return False
+-+        
+-+        try:
+-+            # Test getting all chat history
+-+            response = self.session.get(
+-+                f"{self.base_url}/ai-chat/history",
+-+                headers={"Authorization": f"Bearer {self.auth_token}"},
+-+                timeout=30
+-+            )
+-+            
+-+            if response.status_code == 200:
+-+                data = response.json()
+-+                if "chat_history" in data:
+-+                    history = data["chat_history"]
+-+                    self.log_result("Chat History", True, f"Retrieved {len(history)} chat history items")
+-+                    
+-+                    # Show sample history items
+-+                    for i, item in enumerate(history[:3]):  # Show first 3 items
+-+                        print(f"   History {i+1}: {item.get('message', 'N/A')[:50]}...")
+-+                        print(f"      Response: {item.get('response', 'N/A')[:50]}...")
+-+                        print(f"      Session: {item.get('session_id', 'N/A')}")
+-+                        print(f"      Timestamp: {item.get('timestamp', 'N/A')}")
+-+                    
+-+                    # Test getting history for specific session
+-+                    if self.session_id:
+-+                        print(f"\n   Testing history for session {self.session_id}...")
+-+                        session_response = self.session.get(
+-+                            f"{self.base_url}/ai-chat/history?session_id={self.session_id}",
+-+                            headers={"Authorization": f"Bearer {self.auth_token}"},
+-+                            timeout=30
+-+                        )
+-+                        
+-+                        if session_response.status_code == 200:
+-+                            session_data = session_response.json()
+-+                            session_history = session_data.get("chat_history", [])
+-+                            print(f"   ✅ Session-specific history: {len(session_history)} items")
+-+                        else:
+-+                            print(f"   ❌ Session history failed: {session_response.status_code}")
+-+                    
+-+                    return True
+-+                else:
+-+                    self.log_result("Chat History", False, "Missing chat_history in response")
+-+            else:
+-+                self.log_result("Chat History", False, f"Status: {response.status_code}, Response: {response.text}")
+-+                
+-+        except Exception as e:
+-+            self.log_result("Chat History", False, f"Exception: {str(e)}")
+-+        
+-+        return False
+-+
+-+    def test_premium_features(self):
+-+        """Test premium AI chat features"""
+-+        print("\n💎 Testing Premium AI Chat Features...")
+-+        
+-+        if not self.auth_token:
+-+            self.log_result("Premium Features", False, "No authentication token")
+-+            return False
+-+        
+-+        # First check user's subscription status
+-+        try:
+-+            settings_response = self.session.get(
+-+                f"{self.base_url}/settings",
+-+                headers={"Authorization": f"Bearer {self.auth_token}"},
+-+                timeout=30
+-+            )
+-+            
+-+            if settings_response.status_code == 200:
+-+                settings_data = settings_response.json()
+-+                subscription_plan = settings_data.get("settings", {}).get("subscription_plan", "free")
+-+                print(f"   User subscription: {subscription_plan}")
+-+                
+-+                # Test premium-specific AI features
+-+                premium_message = {
+-+                    "message": "Can you provide real-time energy data and advanced analysis for my consumption patterns?",
+-+                    "session_id": self.session_id
+-+                }
+-+                
+-+                response = self.session.post(
+-+                    f"{self.base_url}/ai-chat",
+-+                    json=premium_message,
+-+                    headers={"Authorization": f"Bearer {self.auth_token}"},
+-+                    timeout=30
+-+                )
+-+                
+-+                if response.status_code == 200:
+-+                    data = response.json()
+-+                    ai_response = data.get("response", "")
+-+                    
+-+                    # Check if response includes premium features
+-+                    has_real_time_data = "real-time" in ai_response.lower() or "fluvius" in ai_response.lower()
+-+                    has_advanced_analysis = len(ai_response) > 200  # Premium responses should be more detailed
+-+                    
+-+                    if subscription_plan == "premium" and (has_real_time_data or has_advanced_analysis):
+-+                        self.log_result("Premium Features", True, f"Premium AI features working (subscription: {subscription_plan})")
+-+                        print(f"   Premium response length: {len(ai_response)} chars")
+-+                    elif subscription_plan == "free":
+-+                        self.log_result("Premium Features", True, f"Free tier working correctly (subscription: {subscription_plan})")
+-+                    else:
+-+                        self.log_result("Premium Features", False, f"Premium features not working as expected (subscription: {subscription_plan})")
+-+                else:
+-+                    self.log_result("Premium Features", False, f"Premium message failed: {response.status_code}")
+-+            else:
+-+                self.log_result("Premium Features", False, f"Could not get user settings: {settings_response.status_code}")
+-+                
+-+        except Exception as e:
+-+            self.log_result("Premium Features", False, f"Exception: {str(e)}")
+-+
+-+    def run_all_tests(self):
+-+        """Run all AI chat tests"""
+-+        print("🎯 FOCUS: Testing AI Chat Functionality")
+-+        print("This addresses the user's issue: 'AI Chat not working'")
+-+        print()
+-+        
+-+        # Test 1: Authentication (CRITICAL)
+-+        auth_success = self.authenticate()
+-+        if not auth_success:
+-+            print("\n❌ CRITICAL FAILURE: Cannot proceed without authentication")
+-+            return self.results
+-+        
+-+        # Test 2: Check EMERGENT_LLM_KEY configuration (CRITICAL)
+-+        key_configured = self.check_emergent_llm_key()
+-+        
+-+        # Test 3: Full conversation test
+-+        if key_configured:
+-+            self.test_ai_chat_conversation()
+-+            
+-+            # Test 4: Chat history
+-+            self.test_chat_history()
+-+            
+-+            # Test 5: Premium features
+-+            self.test_premium_features()
+-+        else:
+-+            print("\n⚠️  Skipping conversation tests due to AI service unavailability")
+-+        
+-+        # Generate summary
+-+        self.print_summary()
+-+        
+-+        return self.results
+-+
+-+    def print_summary(self):
+-+        """Print test summary"""
+-+        print("\n" + "=" * 70)
+-+        print("📊 AI CHAT TEST SUMMARY")
+-+        print("=" * 70)
+-+        
+-+        passed = self.results["passed"]
+-+        total = self.results["total_tests"]
+-+        success_rate = (passed/total)*100 if total > 0 else 0
+-+        
+-+        print(f"Tests Passed: {passed}/{total}")
+-+        print(f"Success Rate: {success_rate:.1f}%")
+-+        print()
+-+        
+-+        # Critical analysis
+-+        print("🔍 AI CHAT ISSUE ANALYSIS:")
+-+        print("User Issue: 'AI Chat not working'")
+-+        print()
+-+        
+-+        key_failed = "EMERGENT_LLM_KEY Check" in self.results["critical_failures"]
+-+        auth_failed = "Authentication" in self.results["critical_failures"]
+-+        
+-+        if auth_failed:
+-+            print("❌ ROOT CAUSE: Demo user authentication is failing")
+-+            print("   SOLUTION: Fix demo user credentials or login endpoint")
+-+        elif key_failed:
+-+            print("❌ ROOT CAUSE: EMERGENT_LLM_KEY is not configured or AI service is unavailable")
+-+            print("   SOLUTION: Configure EMERGENT_LLM_KEY environment variable in backend")
+-+            print("   DETAILS: The AI chat endpoints exist but cannot connect to the LLM service")
+-+        elif passed == total:
+-+            print("✅ ISSUE RESOLVED: AI Chat is working correctly!")
+-+            print("   Users can now use the AI chat feature successfully")
+-+            print("   Both chat messaging and history retrieval are functional")
+-+        else:
+-+            print("⚠️  PARTIAL SUCCESS: Some AI chat features working, some failing")
+-+            print("   Review individual test results above for specific issues")
+-+        
+-+        print()
+-+        
+-+        if self.results["errors"]:
+-+            print("🐛 DETAILED ERRORS:")
+-+            for error in self.results["errors"]:
+-+                print(f"  • {error}")
+-+
+-+def main():
+-+    """Main test execution"""
+-+    tester = AIChatTester()
+-+    results = tester.run_all_tests()
+-+    
+-+    # Return appropriate exit code
+-+    critical_failures = len(results["critical_failures"])
+-+    if critical_failures == 0:
+-+        print("\n🎉 All critical AI chat tests passed!")
+-+        sys.exit(0)
+-+    else:
+-+        print(f"\n❌ {critical_failures} critical AI chat test(s) failed")
+-+        sys.exit(1)
+-+
+-+if __name__ == "__main__":
+-+    main()
+-\ No newline at end of file
+-diff --git a/device_test.py b/device_test.py
+-new file mode 100644
+-index 0000000..28c72a8
+---- /dev/null
+-+++ b/device_test.py
+-@@ -0,0 +1,410 @@
+-+#!/usr/bin/env python3
+-+"""
+-+Device Management Testing Suite for Energo Smart Energy Management API
+-+Testing specific user-reported issue: Cannot add new equipment/devices
+-+"""
+-+
+-+import requests
+-+import json
+-+import time
+-+from datetime import datetime
+-+import sys
+-+import os
+-+
+-+# Get backend URL from frontend .env file
+-+def get_backend_url():
+-+    try:
+-+        with open('/app/frontend/.env', 'r') as f:
+-+            for line in f:
+-+                if line.startswith('EXPO_PACKAGER_PROXY_URL='):
+-+                    base_url = line.split('=')[1].strip().strip('"')
+-+                    return f"{base_url}/api"
+-+    except Exception as e:
+-+        print(f"Error reading frontend .env: {e}")
+-+    return "https://energo-reset.preview.emergentagent.com/api"
+-+
+-+BASE_URL = get_backend_url()
+-+print(f"⚡ Testing Device Management Endpoints at: {BASE_URL}")
+-+print("Focus: Device creation and management - Cannot add new equipment/devices")
+-+print("=" * 70)
+-+
+-+# Demo user credentials
+-+DEMO_USER = {
+-+    "email": "demo@energo.com",
+-+    "password": "password123"
+-+}
+-+
+-+class DeviceManagementTester:
+-+    def __init__(self):
+-+        self.base_url = BASE_URL
+-+        self.session = requests.Session()
+-+        self.auth_token = None
+-+        self.user_id = None
+-+        self.test_property_id = None
+-+        self.results = {
+-+            "total_tests": 0,
+-+            "passed": 0,
+-+            "failed": 0,
+-+            "errors": [],
+-+            "critical_failures": []
+-+        }
+-+
+-+    def log_result(self, test_name, success, message="", is_critical=False):
+-+        self.results["total_tests"] += 1
+-+        if success:
+-+            self.results["passed"] += 1
+-+            print(f"✅ {test_name}: PASSED {message}")
+-+        else:
+-+            self.results["failed"] += 1
+-+            print(f"❌ {test_name}: FAILED {message}")
+-+            self.results["errors"].append(f"{test_name}: {message}")
+-+            if is_critical:
+-+                self.results["critical_failures"].append(test_name)
+-+
+-+    def authenticate(self):
+-+        """Authenticate with demo user"""
+-+        print("\n🔐 Authenticating Demo User...")
+-+        
+-+        try:
+-+            response = self.session.post(
+-+                f"{self.base_url}/auth/login",
+-+                json=DEMO_USER,
+-+                headers={"Content-Type": "application/json"},
+-+                timeout=30
+-+            )
+-+            
+-+            if response.status_code == 200:
+-+                data = response.json()
+-+                if "token" in data and "user" in data:
+-+                    self.auth_token = data["token"]
+-+                    self.user_id = data["user"]["id"]
+-+                    self.session.headers.update({"Authorization": f"Bearer {self.auth_token}"})
+-+                    self.log_result("Authentication", True, f"Logged in as {DEMO_USER['email']}")
+-+                    return True
+-+                else:
+-+                    self.log_result("Authentication", False, "Missing token or user in response", is_critical=True)
+-+            else:
+-+                self.log_result("Authentication", False, f"Status: {response.status_code}, Response: {response.text}", is_critical=True)
+-+                
+-+        except Exception as e:
+-+            self.log_result("Authentication", False, f"Exception: {str(e)}", is_critical=True)
+-+        
+-+        return False
+-+
+-+    def get_device_templates(self):
+-+        """Test GET /api/device-templates endpoint"""
+-+        print("\n🔧 Testing Device Templates...")
+-+        
+-+        try:
+-+            response = self.session.get(
+-+                f"{self.base_url}/device-templates",
+-+                timeout=30
+-+            )
+-+            
+-+            if response.status_code == 200:
+-+                data = response.json()
+-+                common_devices = data.get("common_devices", [])
+-+                all_templates = data.get("all_templates", [])
+-+                by_category = data.get("by_category", {})
+-+                
+-+                self.log_result("Get Device Templates", True, 
+-+                              f"Found {len(common_devices)} common devices, {len(all_templates)} total templates, {len(by_category)} categories")
+-+                
+-+                # Show sample devices
+-+                print("   Sample Common Devices:")
+-+                for i, device in enumerate(common_devices[:5]):
+-+                    print(f"     {i+1}. {device.get('name', 'Unknown')} ({device.get('device_type', 'N/A')})")
+-+                    print(f"        Power: {device.get('power_rating_watts', 'N/A')}W, Usage: {device.get('daily_usage_hours', 'N/A')}h/day")
+-+                
+-+                return common_devices, all_templates
+-+            else:
+-+                self.log_result("Get Device Templates", False, f"Status: {response.status_code}, Response: {response.text}", is_critical=True)
+-+                
+-+        except Exception as e:
+-+            self.log_result("Get Device Templates", False, f"Exception: {str(e)}", is_critical=True)
+-+        
+-+        return [], []
+-+
+-+    def get_user_properties(self):
+-+        """Get user properties to test device creation"""
+-+        print("\n🏠 Getting User Properties...")
+-+        
+-+        if not self.auth_token:
+-+            self.log_result("Get User Properties", False, "No authentication token", is_critical=True)
+-+            return []
+-+        
+-+        try:
+-+            response = self.session.get(
+-+                f"{self.base_url}/properties",
+-+                headers={"Authorization": f"Bearer {self.auth_token}"},
+-+                timeout=30
+-+            )
+-+            
+-+            if response.status_code == 200:
+-+                data = response.json()
+-+                properties = data.get("properties", [])
+-+                
+-+                if len(properties) > 0:
+-+                    self.test_property_id = properties[0].get("id")
+-+                    self.log_result("Get User Properties", True, f"Found {len(properties)} properties. Using property: {self.test_property_id}")
+-+                    
+-+                    # Show property details
+-+                    for i, prop in enumerate(properties[:3]):
+-+                        print(f"   Property {i+1}: {prop.get('name', 'Unknown')} (ID: {prop.get('id', 'N/A')})")
+-+                        print(f"      Address: {prop.get('address', 'N/A')}")
+-+                        print(f"      Type: {prop.get('property_type', 'N/A')}, Size: {prop.get('size_m2', 'N/A')} m²")
+-+                    
+-+                    return properties
+-+                else:
+-+                    self.log_result("Get User Properties", False, "No properties found for user", is_critical=True)
+-+            else:
+-+                self.log_result("Get User Properties", False, f"Status: {response.status_code}, Response: {response.text}", is_critical=True)
+-+                
+-+        except Exception as e:
+-+            self.log_result("Get User Properties", False, f"Exception: {str(e)}", is_critical=True)
+-+        
+-+        return []
+-+
+-+    def test_add_device_to_property(self, device_templates):
+-+        """Test POST /api/properties/{property_id}/devices endpoint"""
+-+        print(f"\n⚡ Testing Add Device to Property {self.test_property_id}...")
+-+        
+-+        if not self.test_property_id:
+-+            self.log_result("Add Device to Property", False, "No test property available", is_critical=True)
+-+            return False
+-+        
+-+        if not device_templates:
+-+            self.log_result("Add Device to Property", False, "No device templates available", is_critical=True)
+-+            return False
+-+        
+-+        # Test adding multiple devices
+-+        successful_devices = 0
+-+        test_devices = device_templates[:3]  # Test first 3 devices
+-+        
+-+        for i, template in enumerate(test_devices):
+-+            device_name = f"Test {template.get('name', 'Device')} {i+1}"
+-+            print(f"\n   Testing device {i+1}: {device_name}")
+-+            
+-+            device_data = {
+-+                "template_id": template.get("id"),
+-+                "name": device_name,
+-+                "location": f"Test Room {i+1}",
+-+                "custom_power_rating": template.get("power_rating_watts"),
+-+                "custom_usage_hours": template.get("daily_usage_hours")
+-+            }
+-+            
+-+            try:
+-+                response = self.session.post(
+-+                    f"{self.base_url}/properties/{self.test_property_id}/devices",
+-+                    json=device_data,
+-+                    headers={"Authorization": f"Bearer {self.auth_token}"},
+-+                    timeout=30
+-+                )
+-+                
+-+                if response.status_code == 200 or response.status_code == 201:
+-+                    data = response.json()
+-+                    device_id = data.get("device_id")
+-+                    if device_id:
+-+                        successful_devices += 1
+-+                        print(f"   ✅ Device created successfully: {device_id}")
+-+                        print(f"      Name: {device_name}")
+-+                        print(f"      Template: {template.get('name', 'Unknown')}")
+-+                    else:
+-+                        print(f"   ❌ No device_id in response: {data}")
+-+                else:
+-+                    print(f"   ❌ Status: {response.status_code}, Response: {response.text}")
+-+                    
+-+            except Exception as e:
+-+                print(f"   ❌ Exception: {str(e)}")
+-+        
+-+        success_rate = (successful_devices / len(test_devices)) * 100
+-+        if successful_devices == len(test_devices):
+-+            self.log_result("Add Device to Property", True, f"All {successful_devices} devices created successfully (100%)")
+-+            return True
+-+        elif successful_devices > 0:
+-+            self.log_result("Add Device to Property", False, f"Only {successful_devices}/{len(test_devices)} devices created ({success_rate:.1f}%)")
+-+        else:
+-+            self.log_result("Add Device to Property", False, "No devices were created successfully", is_critical=True)
+-+        
+-+        return False
+-+
+-+    def test_get_property_devices(self):
+-+        """Test GET /api/properties/{property_id}/devices endpoint"""
+-+        print(f"\n📋 Testing Get Property Devices for {self.test_property_id}...")
+-+        
+-+        if not self.test_property_id:
+-+            self.log_result("Get Property Devices", False, "No test property available")
+-+            return False
+-+        
+-+        try:
+-+            response = self.session.get(
+-+                f"{self.base_url}/properties/{self.test_property_id}/devices",
+-+                headers={"Authorization": f"Bearer {self.auth_token}"},
+-+                timeout=30
+-+            )
+-+            
+-+            if response.status_code == 200:
+-+                data = response.json()
+-+                devices = data.get("devices", [])
+-+                
+-+                if len(devices) > 0:
+-+                    self.log_result("Get Property Devices", True, f"Found {len(devices)} devices in property")
+-+                    
+-+                    # Show device details
+-+                    print("   Property Devices:")
+-+                    for i, device in enumerate(devices[:5]):  # Show first 5 devices
+-+                        print(f"     {i+1}. {device.get('name', 'Unknown')} ({device.get('device_type', 'N/A')})")
+-+                        print(f"        ID: {device.get('id', 'N/A')}")
+-+                        print(f"        Location: {device.get('location', 'N/A')}")
+-+                        print(f"        Power: {device.get('power_rating_watts', 'N/A')}W")
+-+                        print(f"        Usage: {device.get('daily_usage_hours', 'N/A')}h/day")
+-+                    
+-+                    return True
+-+                else:
+-+                    self.log_result("Get Property Devices", False, "No devices found in property")
+-+            else:
+-+                self.log_result("Get Property Devices", False, f"Status: {response.status_code}, Response: {response.text}")
+-+                
+-+        except Exception as e:
+-+            self.log_result("Get Property Devices", False, f"Exception: {str(e)}")
+-+        
+-+        return False
+-+
+-+    def test_device_categories(self):
+-+        """Test device templates by category"""
+-+        print("\n📂 Testing Device Categories...")
+-+        
+-+        try:
+-+            response = self.session.get(
+-+                f"{self.base_url}/device-templates",
+-+                timeout=30
+-+            )
+-+            
+-+            if response.status_code == 200:
+-+                data = response.json()
+-+                by_category = data.get("by_category", {})
+-+                
+-+                if by_category:
+-+                    self.log_result("Device Categories", True, f"Found {len(by_category)} device categories")
+-+                    
+-+                    # Show categories and device counts
+-+                    print("   Device Categories:")
+-+                    for category, devices in by_category.items():
+-+                        print(f"     {category}: {len(devices)} devices")
+-+                        # Show sample devices in category
+-+                        for device in devices[:2]:  # Show first 2 devices per category
+-+                            print(f"       - {device.get('name', 'Unknown')} ({device.get('power_rating_watts', 'N/A')}W)")
+-+                    
+-+                    return True
+-+                else:
+-+                    self.log_result("Device Categories", False, "No device categories found")
+-+            else:
+-+                self.log_result("Device Categories", False, f"Status: {response.status_code}")
+-+                
+-+        except Exception as e:
+-+            self.log_result("Device Categories", False, f"Exception: {str(e)}")
+-+        
+-+        return False
+-+
+-+    def run_all_tests(self):
+-+        """Run all device management tests"""
+-+        print("🎯 FOCUS: Testing Device Management Functionality")
+-+        print("This addresses the user's issue: 'Cannot add new equipment/devices'")
+-+        print()
+-+        
+-+        # Test 1: Authentication (CRITICAL)
+-+        auth_success = self.authenticate()
+-+        if not auth_success:
+-+            print("\n❌ CRITICAL FAILURE: Cannot proceed without authentication")
+-+            return self.results
+-+        
+-+        # Test 2: Get device templates (CRITICAL)
+-+        common_devices, all_templates = self.get_device_templates()
+-+        
+-+        # Test 3: Get device categories
+-+        self.test_device_categories()
+-+        
+-+        # Test 4: Get user properties (CRITICAL)
+-+        properties = self.get_user_properties()
+-+        
+-+        # Test 5: Add devices to property (CRITICAL)
+-+        if properties and common_devices:
+-+            self.test_add_device_to_property(common_devices)
+-+            
+-+            # Test 6: Get property devices
+-+            self.test_get_property_devices()
+-+        else:
+-+            print("\n⚠️  Skipping device creation tests due to missing properties or templates")
+-+        
+-+        # Generate summary
+-+        self.print_summary()
+-+        
+-+        return self.results
+-+
+-+    def print_summary(self):
+-+        """Print test summary"""
+-+        print("\n" + "=" * 70)
+-+        print("📊 DEVICE MANAGEMENT TEST SUMMARY")
+-+        print("=" * 70)
+-+        
+-+        passed = self.results["passed"]
+-+        total = self.results["total_tests"]
+-+        success_rate = (passed/total)*100 if total > 0 else 0
+-+        
+-+        print(f"Tests Passed: {passed}/{total}")
+-+        print(f"Success Rate: {success_rate:.1f}%")
+-+        print()
+-+        
+-+        # Critical analysis
+-+        print("🔍 DEVICE MANAGEMENT ISSUE ANALYSIS:")
+-+        print("User Issue: 'Cannot add new equipment/devices'")
+-+        print()
+-+        
+-+        auth_failed = "Authentication" in self.results["critical_failures"]
+-+        templates_failed = "Get Device Templates" in self.results["critical_failures"]
+-+        properties_failed = "Get User Properties" in self.results["critical_failures"]
+-+        add_device_failed = "Add Device to Property" in self.results["critical_failures"]
+-+        
+-+        if auth_failed:
+-+            print("❌ ROOT CAUSE: Demo user authentication is failing")
+-+            print("   SOLUTION: Fix demo user credentials or login endpoint")
+-+        elif templates_failed:
+-+            print("❌ ROOT CAUSE: Device templates are not available")
+-+            print("   SOLUTION: Fix device templates endpoint or ensure templates are loaded")
+-+        elif properties_failed:
+-+            print("❌ ROOT CAUSE: User has no properties to add devices to")
+-+            print("   SOLUTION: Ensure users can create properties first")
+-+        elif add_device_failed:
+-+            print("❌ ROOT CAUSE: Device creation endpoint is failing")
+-+            print("   SOLUTION: Fix POST /api/properties/{property_id}/devices endpoint")
+-+        elif passed == total:
+-+            print("✅ ISSUE RESOLVED: Device management is working correctly!")
+-+            print("   Users can now add new equipment/devices to their properties")
+-+            print("   Device templates are available and device creation is functional")
+-+        else:
+-+            print("⚠️  PARTIAL SUCCESS: Some device management features working, some failing")
+-+            print("   Review individual test results above for specific issues")
+-+        
+-+        print()
+-+        
+-+        if self.results["errors"]:
+-+            print("🐛 DETAILED ERRORS:")
+-+            for error in self.results["errors"]:
+-+                print(f"  • {error}")
+-+
+-+def main():
+-+    """Main test execution"""
+-+    tester = DeviceManagementTester()
+-+    results = tester.run_all_tests()
+-+    
+-+    # Return appropriate exit code
+-+    critical_failures = len(results["critical_failures"])
+-+    if critical_failures == 0:
+-+        print("\n🎉 All critical device management tests passed!")
+-+        sys.exit(0)
+-+    else:
+-+        print(f"\n❌ {critical_failures} critical device management test(s) failed")
+-+        sys.exit(1)
+-+
+-+if __name__ == "__main__":
+-+    main()
+-\ No newline at end of file
 -diff --git a/model.patch b/model.patch
--index 622b229..e69de29 100644
+-index 6b6c020..8d3ef61 100644
 ---- a/model.patch
 -+++ b/model.patch
--@@ -1,87 +0,0 @@
+-@@ -1,208 +0,0 @@
+--diff --git a/backend/server.py b/backend/server.py
+--index 9866b03..f610d70 100644
+----- a/backend/server.py
+--+++ b/backend/server.py
+--@@ -1516,7 +1516,15 @@ async def create_property(property_data: dict, user_id: str = Depends(get_curren
+--         
+--         await db.properties.insert_one(property_dict)
+--         
+---        return property_dict
+--+        # Return property_id and clean response without MongoDB _id
+--+        response_dict = property_dict.copy()
+--+        response_dict.pop("_id", None)  # Remove _id if it exists
+--+        
+--+        return {
+--+            "property_id": property_dict["id"],
+--+            "message": "Property created successfully",
+--+            "property": response_dict
+--+        }
+--     except Exception as e:
+--         raise HTTPException(status_code=500, detail=f"Failed to create property: {str(e)}")
+-- 
+--@@ -1525,13 +1533,14 @@ async def get_user_properties(user_id: str = Depends(get_current_user)):
+--     """Get all properties for the current user"""
+--     try:
+--         if not PROPERTY_MANAGEMENT_ENABLED:
+---            return []
+--+            return {"properties": []}
+--         
+--         properties = list(await db.properties.find(
+---            {"user_id": user_id, "active": True}
+--+            {"user_id": user_id, "active": True},
+--+            {"_id": 0}  # Exclude MongoDB _id field to avoid ObjectId serialization issues
+--         ).sort("created_at", -1).to_list(length=100))
+--         
+---        return properties
+--+        return {"properties": properties}
+--     except Exception as e:
+--         raise HTTPException(status_code=500, detail=f"Failed to fetch properties: {str(e)}")
+-- 
+--@@ -1573,21 +1582,23 @@ async def get_property_devices(property_id: str, user_id: str = Depends(get_curr
+--     """Get all devices for a property"""
+--     try:
+--         if not PROPERTY_MANAGEMENT_ENABLED:
+---            return []
+--+            return {"devices": []}
+--         
+--         # Verify property belongs to user
+--         property_doc = await db.properties.find_one(
+---            {"id": property_id, "user_id": user_id, "active": True}
+--+            {"id": property_id, "user_id": user_id, "active": True},
+--+            {"_id": 0}  # Exclude MongoDB _id field
+--         )
+--         
+--         if not property_doc:
+--             raise HTTPException(status_code=404, detail="Property not found")
+--         
+--         devices = list(await db.devices.find(
+---            {"property_id": property_id, "user_id": user_id, "active": True}
+--+            {"property_id": property_id, "user_id": user_id, "active": True},
+--+            {"_id": 0}  # Exclude MongoDB _id field to avoid ObjectId serialization issues
+--         ).sort("created_at", -1).to_list(length=1000))
+--         
+---        return devices
+--+        return {"devices": devices}
+--         
+--     except HTTPException:
+--         raise
 --diff --git a/model.patch b/model.patch
---index fa89f96..e69de29 100644
+--index 622b229..e69de29 100644
 ----- a/model.patch
 --+++ b/model.patch
---@@ -1,13 +0,0 @@
+--@@ -1,87 +0,0 @@
+---diff --git a/model.patch b/model.patch
+---index fa89f96..e69de29 100644
+------ a/model.patch
+---+++ b/model.patch
+---@@ -1,13 +0,0 @@
+----diff --git a/test_result.md b/test_result.md
+----index cf60cf5..b7b4bb4 100644
+------- a/test_result.md
+----+++ b/test_result.md
+----@@ -210,7 +210,7 @@ agent_communication:
+----   - agent: "testing"
+----     message: "Backend testing complete - all APIs working correctly. Fixed ObjectId serialization issue in dashboard endpoint. Ready for frontend testing if requested."
+---- 
+-----user_problem_statement: "Test the Energo energy tracking app backend thoroughly. The app should have authentication system, energy tracking endpoints, database integration, and complete authentication flow."
+----+user_problem_statement: "Complete restoration of original Energo Smart application from GitHub and implement MVP property/device management enhancements step-by-step"
+---- 
+---- backend:
+----   - task: "User Registration API"
 ---diff --git a/test_result.md b/test_result.md
----index cf60cf5..b7b4bb4 100644
+---index b7b4bb4..9b56c57 100644
 ------ a/test_result.md
 ---+++ b/test_result.md
----@@ -210,7 +210,7 @@ agent_communication:
----   - agent: "testing"
----     message: "Backend testing complete - all APIs working correctly. Fixed ObjectId serialization issue in dashboard endpoint. Ready for frontend testing if requested."
+---@@ -387,6 +387,54 @@ backend:
+---           agent: "testing"
+---           comment: "Premium users receive enhanced AI responses with real-time data integration. AI chat successfully handles 5/5 different message types including energy tips, subsidies, consumption patterns, and regulations. Responses are personalized based on user region and consumption data."
 --- 
-----user_problem_statement: "Test the Energo energy tracking app backend thoroughly. The app should have authentication system, energy tracking endpoints, database integration, and complete authentication flow."
----+user_problem_statement: "Complete restoration of original Energo Smart application from GitHub and implement MVP property/device management enhancements step-by-step"
+---+  - task: "Usage Scenarios API"
+---+    implemented: true
+---+    working: true
+---+    file: "/app/backend/server.py"
+---+    stuck_count: 0
+---+    priority: "high"
+---+    needs_retesting: false
+---+    status_history:
+---+        - working: true
+---+          agent: "testing"
+---+          comment: "GET /api/usage-scenarios endpoint working correctly. Returns 5 demo scenarios including family_home, ev_owner, small_business, studio_apartment, and smart_home with proper structure (name, description, typical_monthly_kwh, typical_monthly_cost, device_count)."
+---+
+---+  - task: "Device Templates API"
+---+    implemented: true
+---+    working: true
+---+    file: "/app/backend/server.py"
+---+    stuck_count: 0
+---+    priority: "high"
+---+    needs_retesting: false
+---+    status_history:
+---+        - working: true
+---+          agent: "testing"
+---+          comment: "GET /api/device-templates endpoint working correctly. Returns 9 common devices, 7 categories (major_appliances, electronics, lighting, heating_cooling, water_heating, ev_charging, other), and 20 total device templates with proper structure."
+---+
+---+  - task: "Properties Management API"
+---+    implemented: true
+---+    working: false
+---+    file: "/app/backend/server.py"
+---+    stuck_count: 1
+---+    priority: "high"
+---+    needs_retesting: false
+---+    status_history:
+---+        - working: false
+---+          agent: "testing"
+---+          comment: "GET /api/properties returns empty array for demo user (no properties exist). POST /api/properties returns 500 Internal Server Error due to missing property management modules (models.py, device_templates.py, consumption_engine.py). ObjectId serialization issues in property creation."
+---+
+---+  - task: "Demo Scenario Setup API"
+---+    implemented: false
+---+    working: false
+---+    file: "/app/backend/server.py"
+---+    stuck_count: 1
+---+    priority: "high"
+---+    needs_retesting: false
+---+    status_history:
+---+        - working: false
+---+          agent: "testing"
+---+          comment: "POST /api/setup-scenario/{scenario_key} returns 404 Not Found. Endpoint not implemented despite being referenced in server.py. This is the root cause of user's issue 'cannot choose from demo properties' - users cannot create demo properties from available scenarios."
+---+
+--- frontend:
+---   # Frontend testing not performed as per testing agent instructions
 --- 
---- backend:
----   - task: "User Registration API"
+---@@ -409,4 +457,6 @@ agent_communication:
+---     - agent: "testing"
+---       message: "Comprehensive backend testing completed successfully. All 8 backend tasks are working correctly. Fixed one critical issue with MongoDB ObjectId serialization in dashboard endpoint. Authentication system, energy tracking APIs, database integration, and security are all functioning properly. Backend is ready for production use."
+---     - agent: "testing"
+----      message: "NEW FEATURES TESTING COMPLETED: Thoroughly tested all new AI chat functionality and premium features. Interactive AI Chat endpoints working perfectly with session continuity, premium users getting enhanced responses, automatic premium access configured correctly, Fluvius data endpoint functional with mock data fallback, all existing functionality still working. Fixed minor issues: ObjectId serialization in chat history, dashboard field compatibility, endpoint naming. All 23 comprehensive tests passing (100% success rate). Backend is fully functional and ready for production."
+---\ No newline at end of file
+---+      message: "NEW FEATURES TESTING COMPLETED: Thoroughly tested all new AI chat functionality and premium features. Interactive AI Chat endpoints working perfectly with session continuity, premium users getting enhanced responses, automatic premium access configured correctly, Fluvius data endpoint functional with mock data fallback, all existing functionality still working. Fixed minor issues: ObjectId serialization in chat history, dashboard field compatibility, endpoint naming. All 23 comprehensive tests passing (100% success rate). Backend is fully functional and ready for production."
+---+    - agent: "testing"
+---+      message: "PROPERTY MANAGEMENT TESTING COMPLETED: Tested property management endpoints as requested by user. Found critical issues: 1) GET /api/usage-scenarios and GET /api/device-templates work correctly and return demo scenarios (family_home, ev_owner, etc.) and device templates. 2) GET /api/properties returns empty array (no properties for demo user). 3) POST /api/setup-scenario/{scenario_key} returns 404 Not Found - endpoint not implemented. 4) POST /api/properties returns 500 Internal Server Error due to missing property management modules (models.py, device_templates.py, consumption_engine.py). 5) AI Chat endpoints failing with 500 errors due to missing EMERGENT_LLM_KEY. The user's issue 'cannot choose from demo properties' is confirmed - demo scenario setup is not working."
+---\ No newline at end of file
 --diff --git a/test_result.md b/test_result.md
---index b7b4bb4..9b56c57 100644
+--index 9b56c57..f6bd7f2 100644
 ----- a/test_result.md
 --+++ b/test_result.md
---@@ -387,6 +387,54 @@ backend:
---           agent: "testing"
---           comment: "Premium users receive enhanced AI responses with real-time data integration. AI chat successfully handles 5/5 different message types including energy tips, subsidies, consumption patterns, and regulations. Responses are personalized based on user region and consumption data."
+--@@ -413,7 +413,7 @@ backend:
 -- 
---+  - task: "Usage Scenarios API"
---+    implemented: true
+--   - task: "Properties Management API"
+--     implemented: true
+---    working: false
 --+    working: true
---+    file: "/app/backend/server.py"
---+    stuck_count: 0
---+    priority: "high"
---+    needs_retesting: false
---+    status_history:
+--     file: "/app/backend/server.py"
+--     stuck_count: 1
+--     priority: "high"
+--@@ -422,10 +422,13 @@ backend:
+--         - working: false
+--           agent: "testing"
+--           comment: "GET /api/properties returns empty array for demo user (no properties exist). POST /api/properties returns 500 Internal Server Error due to missing property management modules (models.py, device_templates.py, consumption_engine.py). ObjectId serialization issues in property creation."
 --+        - working: true
 --+          agent: "testing"
---+          comment: "GET /api/usage-scenarios endpoint working correctly. Returns 5 demo scenarios including family_home, ev_owner, small_business, studio_apartment, and smart_home with proper structure (name, description, typical_monthly_kwh, typical_monthly_cost, device_count)."
---+
---+  - task: "Device Templates API"
+--+          comment: "FIXED: Property management endpoints are now working correctly. GET /api/properties returns properties with proper structure (excluding MongoDB _id field to avoid ObjectId serialization issues). POST /api/properties successfully creates properties and returns property_id. Fixed ObjectId serialization issues by excluding _id field from MongoDB queries. Property creation and retrieval endpoints are fully functional."
+-- 
+--   - task: "Demo Scenario Setup API"
+---    implemented: false
+---    working: false
 --+    implemented: true
 --+    working: true
---+    file: "/app/backend/server.py"
---+    stuck_count: 0
---+    priority: "high"
---+    needs_retesting: false
---+    status_history:
+--     file: "/app/backend/server.py"
+--     stuck_count: 1
+--     priority: "high"
+--@@ -434,6 +437,9 @@ backend:
+--         - working: false
+--           agent: "testing"
+--           comment: "POST /api/setup-scenario/{scenario_key} returns 404 Not Found. Endpoint not implemented despite being referenced in server.py. This is the root cause of user's issue 'cannot choose from demo properties' - users cannot create demo properties from available scenarios."
 --+        - working: true
 --+          agent: "testing"
---+          comment: "GET /api/device-templates endpoint working correctly. Returns 9 common devices, 7 categories (major_appliances, electronics, lighting, heating_cooling, water_heating, ev_charging, other), and 20 total device templates with proper structure."
---+
---+  - task: "Properties Management API"
---+    implemented: true
---+    working: false
---+    file: "/app/backend/server.py"
---+    stuck_count: 1
---+    priority: "high"
---+    needs_retesting: false
---+    status_history:
---+        - working: false
---+          agent: "testing"
---+          comment: "GET /api/properties returns empty array for demo user (no properties exist). POST /api/properties returns 500 Internal Server Error due to missing property management modules (models.py, device_templates.py, consumption_engine.py). ObjectId serialization issues in property creation."
---+
---+  - task: "Demo Scenario Setup API"
---+    implemented: false
---+    working: false
---+    file: "/app/backend/server.py"
---+    stuck_count: 1
---+    priority: "high"
---+    needs_retesting: false
---+    status_history:
---+        - working: false
---+          agent: "testing"
---+          comment: "POST /api/setup-scenario/{scenario_key} returns 404 Not Found. Endpoint not implemented despite being referenced in server.py. This is the root cause of user's issue 'cannot choose from demo properties' - users cannot create demo properties from available scenarios."
---+
+--+          comment: "ISSUE RESOLVED: POST /api/setup-scenario/family_home endpoint is now working correctly. Successfully creates properties with devices and meter readings. Demo user (demo@energo.com / password123) can authenticate and create Family Home scenario. Property creation confirmed with Property ID returned, 8 devices created, and 720 meter readings generated. Fixed ObjectId serialization issues in GET /api/properties endpoint. The user's issue 'clicking Family Home (4 people) doesn't create properties' is now resolved."
+-- 
 -- frontend:
 --   # Frontend testing not performed as per testing agent instructions
--- 
---@@ -409,4 +457,6 @@ agent_communication:
+--@@ -459,4 +465,6 @@ agent_communication:
 --     - agent: "testing"
---       message: "Comprehensive backend testing completed successfully. All 8 backend tasks are working correctly. Fixed one critical issue with MongoDB ObjectId serialization in dashboard endpoint. Authentication system, energy tracking APIs, database integration, and security are all functioning properly. Backend is ready for production use."
+--       message: "NEW FEATURES TESTING COMPLETED: Thoroughly tested all new AI chat functionality and premium features. Interactive AI Chat endpoints working perfectly with session continuity, premium users getting enhanced responses, automatic premium access configured correctly, Fluvius data endpoint functional with mock data fallback, all existing functionality still working. Fixed minor issues: ObjectId serialization in chat history, dashboard field compatibility, endpoint naming. All 23 comprehensive tests passing (100% success rate). Backend is fully functional and ready for production."
 --     - agent: "testing"
----      message: "NEW FEATURES TESTING COMPLETED: Thoroughly tested all new AI chat functionality and premium features. Interactive AI Chat endpoints working perfectly with session continuity, premium users getting enhanced responses, automatic premium access configured correctly, Fluvius data endpoint functional with mock data fallback, all existing functionality still working. Fixed minor issues: ObjectId serialization in chat history, dashboard field compatibility, endpoint naming. All 23 comprehensive tests passing (100% success rate). Backend is fully functional and ready for production."
+---      message: "PROPERTY MANAGEMENT TESTING COMPLETED: Tested property management endpoints as requested by user. Found critical issues: 1) GET /api/usage-scenarios and GET /api/device-templates work correctly and return demo scenarios (family_home, ev_owner, etc.) and device templates. 2) GET /api/properties returns empty array (no properties for demo user). 3) POST /api/setup-scenario/{scenario_key} returns 404 Not Found - endpoint not implemented. 4) POST /api/properties returns 500 Internal Server Error due to missing property management modules (models.py, device_templates.py, consumption_engine.py). 5) AI Chat endpoints failing with 500 errors due to missing EMERGENT_LLM_KEY. The user's issue 'cannot choose from demo properties' is confirmed - demo scenario setup is not working."
 --\ No newline at end of file
---+      message: "NEW FEATURES TESTING COMPLETED: Thoroughly tested all new AI chat functionality and premium features. Interactive AI Chat endpoints working perfectly with session continuity, premium users getting enhanced responses, automatic premium access configured correctly, Fluvius data endpoint functional with mock data fallback, all existing functionality still working. Fixed minor issues: ObjectId serialization in chat history, dashboard field compatibility, endpoint naming. All 23 comprehensive tests passing (100% success rate). Backend is fully functional and ready for production."
---+    - agent: "testing"
 --+      message: "PROPERTY MANAGEMENT TESTING COMPLETED: Tested property management endpoints as requested by user. Found critical issues: 1) GET /api/usage-scenarios and GET /api/device-templates work correctly and return demo scenarios (family_home, ev_owner, etc.) and device templates. 2) GET /api/properties returns empty array (no properties for demo user). 3) POST /api/setup-scenario/{scenario_key} returns 404 Not Found - endpoint not implemented. 4) POST /api/properties returns 500 Internal Server Error due to missing property management modules (models.py, device_templates.py, consumption_engine.py). 5) AI Chat endpoints failing with 500 errors due to missing EMERGENT_LLM_KEY. The user's issue 'cannot choose from demo properties' is confirmed - demo scenario setup is not working."
+--+    - agent: "testing"
+--+      message: "SCENARIO SETUP ISSUE RESOLVED: Successfully tested and confirmed the fix for POST /api/setup-scenario/family_home endpoint. The user's reported issue 'clicking Family Home (4 people) doesn't create properties' has been resolved. Testing results: ✅ Demo user login (demo@energo.com / password123) working, ✅ Setup scenario endpoint creates properties with 8 devices and 720 meter readings, ✅ Properties are retrievable via GET /api/properties, ✅ Property creation endpoints working. Fixed ObjectId serialization issues in property management endpoints. All critical functionality is now working correctly - users can successfully create demo properties from the Family Home scenario."
 --\ No newline at end of file
 -diff --git a/test_result.md b/test_result.md
--index 9b56c57..f6bd7f2 100644
+-index f6bd7f2..04c8fec 100644
 ---- a/test_result.md
 -+++ b/test_result.md
--@@ -413,7 +413,7 @@ backend:
+-@@ -314,15 +314,18 @@ backend:
 - 
--   - task: "Properties Management API"
+-   - task: "Interactive AI Chat System"
 -     implemented: true
---    working: false
--+    working: true
+--    working: true
+-+    working: false
 -     file: "/app/backend/server.py"
--     stuck_count: 1
+--    stuck_count: 0
+-+    stuck_count: 1
 -     priority: "high"
--@@ -422,10 +422,13 @@ backend:
--         - working: false
+-     needs_retesting: false
+-     status_history:
+-         - working: true
 -           agent: "testing"
--           comment: "GET /api/properties returns empty array for demo user (no properties exist). POST /api/properties returns 500 Internal Server Error due to missing property management modules (models.py, device_templates.py, consumption_engine.py). ObjectId serialization issues in property creation."
--+        - working: true
+-           comment: "POST /api/ai-chat endpoint working perfectly. Handles various message types, maintains session continuity, provides personalized energy advice based on user data and region. Session IDs maintained across conversations. AI responses are comprehensive and relevant."
+-+        - working: false
 -+          agent: "testing"
--+          comment: "FIXED: Property management endpoints are now working correctly. GET /api/properties returns properties with proper structure (excluding MongoDB _id field to avoid ObjectId serialization issues). POST /api/properties successfully creates properties and returns property_id. Fixed ObjectId serialization issues by excluding _id field from MongoDB queries. Property creation and retrieval endpoints are fully functional."
+-+          comment: "CRITICAL ISSUE: EMERGENT_LLM_KEY environment variable not configured. AI chat endpoints return 500 'AI service unavailable'. The endpoints exist and authentication works, but cannot connect to LLM service. This is the root cause of user's issue 'AI Chat not working'."
 - 
--   - task: "Demo Scenario Setup API"
---    implemented: false
---    working: false
+-   - task: "AI Chat History System"
+-     implemented: true
+-@@ -426,6 +429,18 @@ backend:
+-           agent: "testing"
+-           comment: "FIXED: Property management endpoints are now working correctly. GET /api/properties returns properties with proper structure (excluding MongoDB _id field to avoid ObjectId serialization issues). POST /api/properties successfully creates properties and returns property_id. Fixed ObjectId serialization issues by excluding _id field from MongoDB queries. Property creation and retrieval endpoints are fully functional."
+- 
+-+  - task: "Device Management API"
 -+    implemented: true
--+    working: true
--     file: "/app/backend/server.py"
--     stuck_count: 1
--     priority: "high"
--@@ -434,6 +437,9 @@ backend:
--         - working: false
--           agent: "testing"
--           comment: "POST /api/setup-scenario/{scenario_key} returns 404 Not Found. Endpoint not implemented despite being referenced in server.py. This is the root cause of user's issue 'cannot choose from demo properties' - users cannot create demo properties from available scenarios."
--+        - working: true
+-+    working: false
+-+    file: "/app/backend/server.py"
+-+    stuck_count: 1
+-+    priority: "high"
+-+    needs_retesting: false
+-+    status_history:
+-+        - working: false
 -+          agent: "testing"
--+          comment: "ISSUE RESOLVED: POST /api/setup-scenario/family_home endpoint is now working correctly. Successfully creates properties with devices and meter readings. Demo user (demo@energo.com / password123) can authenticate and create Family Home scenario. Property creation confirmed with Property ID returned, 8 devices created, and 720 meter readings generated. Fixed ObjectId serialization issues in GET /api/properties endpoint. The user's issue 'clicking Family Home (4 people) doesn't create properties' is now resolved."
-- 
-- frontend:
--   # Frontend testing not performed as per testing agent instructions
--@@ -459,4 +465,6 @@ agent_communication:
+-+          comment: "PARTIAL FUNCTIONALITY: GET /api/device-templates works correctly (9 common devices, 20 total templates, 7 categories). POST /api/properties/{property_id}/devices returns 500 Internal Server Error due to ObjectId serialization issues, but devices are actually created successfully (confirmed by GET requests showing created devices). This is the root cause of user's issue 'Cannot add new equipment/devices' - the functionality works but returns error responses."
+-+
+-   - task: "Demo Scenario Setup API"
+-     implemented: true
+-     working: true
+-@@ -467,4 +482,6 @@ agent_communication:
 -     - agent: "testing"
--       message: "NEW FEATURES TESTING COMPLETED: Thoroughly tested all new AI chat functionality and premium features. Interactive AI Chat endpoints working perfectly with session continuity, premium users getting enhanced responses, automatic premium access configured correctly, Fluvius data endpoint functional with mock data fallback, all existing functionality still working. Fixed minor issues: ObjectId serialization in chat history, dashboard field compatibility, endpoint naming. All 23 comprehensive tests passing (100% success rate). Backend is fully functional and ready for production."
+-       message: "PROPERTY MANAGEMENT TESTING COMPLETED: Tested property management endpoints as requested by user. Found critical issues: 1) GET /api/usage-scenarios and GET /api/device-templates work correctly and return demo scenarios (family_home, ev_owner, etc.) and device templates. 2) GET /api/properties returns empty array (no properties for demo user). 3) POST /api/setup-scenario/{scenario_key} returns 404 Not Found - endpoint not implemented. 4) POST /api/properties returns 500 Internal Server Error due to missing property management modules (models.py, device_templates.py, consumption_engine.py). 5) AI Chat endpoints failing with 500 errors due to missing EMERGENT_LLM_KEY. The user's issue 'cannot choose from demo properties' is confirmed - demo scenario setup is not working."
 -     - agent: "testing"
---      message: "PROPERTY MANAGEMENT TESTING COMPLETED: Tested property management endpoints as requested by user. Found critical issues: 1) GET /api/usage-scenarios and GET /api/device-templates work correctly and return demo scenarios (family_home, ev_owner, etc.) and device templates. 2) GET /api/properties returns empty array (no properties for demo user). 3) POST /api/setup-scenario/{scenario_key} returns 404 Not Found - endpoint not implemented. 4) POST /api/properties returns 500 Internal Server Error due to missing property management modules (models.py, device_templates.py, consumption_engine.py). 5) AI Chat endpoints failing with 500 errors due to missing EMERGENT_LLM_KEY. The user's issue 'cannot choose from demo properties' is confirmed - demo scenario setup is not working."
+--      message: "SCENARIO SETUP ISSUE RESOLVED: Successfully tested and confirmed the fix for POST /api/setup-scenario/family_home endpoint. The user's reported issue 'clicking Family Home (4 people) doesn't create properties' has been resolved. Testing results: ✅ Demo user login (demo@energo.com / password123) working, ✅ Setup scenario endpoint creates properties with 8 devices and 720 meter readings, ✅ Properties are retrievable via GET /api/properties, ✅ Property creation endpoints working. Fixed ObjectId serialization issues in property management endpoints. All critical functionality is now working correctly - users can successfully create demo properties from the Family Home scenario."
 -\ No newline at end of file
--+      message: "PROPERTY MANAGEMENT TESTING COMPLETED: Tested property management endpoints as requested by user. Found critical issues: 1) GET /api/usage-scenarios and GET /api/device-templates work correctly and return demo scenarios (family_home, ev_owner, etc.) and device templates. 2) GET /api/properties returns empty array (no properties for demo user). 3) POST /api/setup-scenario/{scenario_key} returns 404 Not Found - endpoint not implemented. 4) POST /api/properties returns 500 Internal Server Error due to missing property management modules (models.py, device_templates.py, consumption_engine.py). 5) AI Chat endpoints failing with 500 errors due to missing EMERGENT_LLM_KEY. The user's issue 'cannot choose from demo properties' is confirmed - demo scenario setup is not working."
--+    - agent: "testing"
 -+      message: "SCENARIO SETUP ISSUE RESOLVED: Successfully tested and confirmed the fix for POST /api/setup-scenario/family_home endpoint. The user's reported issue 'clicking Family Home (4 people) doesn't create properties' has been resolved. Testing results: ✅ Demo user login (demo@energo.com / password123) working, ✅ Setup scenario endpoint creates properties with 8 devices and 720 meter readings, ✅ Properties are retrievable via GET /api/properties, ✅ Property creation endpoints working. Fixed ObjectId serialization issues in property management endpoints. All critical functionality is now working correctly - users can successfully create demo properties from the Family Home scenario."
+-+    - agent: "testing"
+-+      message: "USER-REPORTED ISSUES TESTING COMPLETED (2024-12-19): Tested all 3 specific user-reported issues: 1) ❌ AI Chat not working - CONFIRMED: EMERGENT_LLM_KEY not configured, AI chat endpoints return 500 'AI service unavailable'. 2) ✅ Cannot select new scenarios or properties - RESOLVED: Demo user can authenticate, usage scenarios available, setup-scenario/family_home creates properties successfully. 3) ⚠️ Cannot add new equipment/devices - PARTIAL: Device templates available, but POST /api/properties/{property_id}/devices returns 500 errors due to ObjectId serialization issues, though devices are actually created successfully. Root causes identified: Missing EMERGENT_LLM_KEY environment variable, ObjectId serialization errors in device creation responses."
 -\ No newline at end of file
 diff --git a/test_result.md b/test_result.md
-index f6bd7f2..04c8fec 100644
+index 04c8fec..8c42894 100644
 --- a/test_result.md
 +++ b/test_result.md
-@@ -314,15 +314,18 @@ backend:
+@@ -314,7 +314,7 @@ backend:
  
    - task: "Interactive AI Chat System"
      implemented: true
--    working: true
-+    working: false
+-    working: false
++    working: true
      file: "/app/backend/server.py"
--    stuck_count: 0
-+    stuck_count: 1
+     stuck_count: 1
      priority: "high"
-     needs_retesting: false
-     status_history:
-         - working: true
+@@ -326,6 +326,9 @@ backend:
+         - working: false
            agent: "testing"
-           comment: "POST /api/ai-chat endpoint working perfectly. Handles various message types, maintains session continuity, provides personalized energy advice based on user data and region. Session IDs maintained across conversations. AI responses are comprehensive and relevant."
-+        - working: false
+           comment: "CRITICAL ISSUE: EMERGENT_LLM_KEY environment variable not configured. AI chat endpoints return 500 'AI service unavailable'. The endpoints exist and authentication works, but cannot connect to LLM service. This is the root cause of user's issue 'AI Chat not working'."
++        - working: true
 +          agent: "testing"
-+          comment: "CRITICAL ISSUE: EMERGENT_LLM_KEY environment variable not configured. AI chat endpoints return 500 'AI service unavailable'. The endpoints exist and authentication works, but cannot connect to LLM service. This is the root cause of user's issue 'AI Chat not working'."
++          comment: "ISSUE RESOLVED: AI Chat functionality now working perfectly. EMERGENT_LLM_KEY is properly configured. Tested 3 different message types successfully: basic energy advice, subsidy information, and specific optimization questions. All responses are comprehensive and relevant. Session continuity maintained across conversations. User's issue 'AI Chat not working' is now fully resolved."
  
    - task: "AI Chat History System"
      implemented: true
-@@ -426,6 +429,18 @@ backend:
-           agent: "testing"
-           comment: "FIXED: Property management endpoints are now working correctly. GET /api/properties returns properties with proper structure (excluding MongoDB _id field to avoid ObjectId serialization issues). POST /api/properties successfully creates properties and returns property_id. Fixed ObjectId serialization issues by excluding _id field from MongoDB queries. Property creation and retrieval endpoints are fully functional."
+@@ -431,7 +434,7 @@ backend:
  
-+  - task: "Device Management API"
+   - task: "Device Management API"
+     implemented: true
+-    working: false
++    working: true
+     file: "/app/backend/server.py"
+     stuck_count: 1
+     priority: "high"
+@@ -440,6 +443,9 @@ backend:
+         - working: false
+           agent: "testing"
+           comment: "PARTIAL FUNCTIONALITY: GET /api/device-templates works correctly (9 common devices, 20 total templates, 7 categories). POST /api/properties/{property_id}/devices returns 500 Internal Server Error due to ObjectId serialization issues, but devices are actually created successfully (confirmed by GET requests showing created devices). This is the root cause of user's issue 'Cannot add new equipment/devices' - the functionality works but returns error responses."
++        - working: true
++          agent: "testing"
++          comment: "ISSUE RESOLVED: Device management API now working correctly. Both GET /api/properties/{property_id}/devices (retrieves existing devices) and POST /api/properties/{property_id}/devices (creates new devices) are functioning properly. ObjectId serialization issues have been fixed. Successfully tested device creation with proper device_id returned. User's issue 'Cannot add new equipment/devices' is now fully resolved."
+ 
+   - task: "Demo Scenario Setup API"
+     implemented: true
+@@ -455,6 +461,21 @@ backend:
+         - working: true
+           agent: "testing"
+           comment: "ISSUE RESOLVED: POST /api/setup-scenario/family_home endpoint is now working correctly. Successfully creates properties with devices and meter readings. Demo user (demo@energo.com / password123) can authenticate and create Family Home scenario. Property creation confirmed with Property ID returned, 8 devices created, and 720 meter readings generated. Fixed ObjectId serialization issues in GET /api/properties endpoint. The user's issue 'clicking Family Home (4 people) doesn't create properties' is now resolved."
++        - working: true
++          agent: "testing"
++          comment: "COMPREHENSIVE SCENARIO TESTING COMPLETED: All scenario setup endpoints now working perfectly. Successfully tested POST /api/setup-scenario/ev_owner, POST /api/setup-scenario/small_business, and POST /api/setup-scenario/smart_home. All scenarios create properties with proper IDs returned. User's issue 'cannot select new scenarios' is fully resolved - all scenario types are now functional."
++
++  - task: "New Scenario Types (EV Owner, Small Business, Smart Home)"
 +    implemented: true
-+    working: false
++    working: true
 +    file: "/app/backend/server.py"
-+    stuck_count: 1
++    stuck_count: 0
 +    priority: "high"
 +    needs_retesting: false
 +    status_history:
-+        - working: false
++        - working: true
 +          agent: "testing"
-+          comment: "PARTIAL FUNCTIONALITY: GET /api/device-templates works correctly (9 common devices, 20 total templates, 7 categories). POST /api/properties/{property_id}/devices returns 500 Internal Server Error due to ObjectId serialization issues, but devices are actually created successfully (confirmed by GET requests showing created devices). This is the root cause of user's issue 'Cannot add new equipment/devices' - the functionality works but returns error responses."
-+
-   - task: "Demo Scenario Setup API"
-     implemented: true
-     working: true
-@@ -467,4 +482,6 @@ agent_communication:
++          comment: "NEW SCENARIO TYPES WORKING: Successfully tested all new scenario endpoints. POST /api/setup-scenario/ev_owner creates EV owner properties, POST /api/setup-scenario/small_business creates business properties, POST /api/setup-scenario/smart_home creates smart home properties. All scenarios return proper property IDs and create functional properties. User can now select from multiple scenario types as requested."
+ 
+ frontend:
+   # Frontend testing not performed as per testing agent instructions
+@@ -484,4 +505,6 @@ agent_communication:
      - agent: "testing"
-       message: "PROPERTY MANAGEMENT TESTING COMPLETED: Tested property management endpoints as requested by user. Found critical issues: 1) GET /api/usage-scenarios and GET /api/device-templates work correctly and return demo scenarios (family_home, ev_owner, etc.) and device templates. 2) GET /api/properties returns empty array (no properties for demo user). 3) POST /api/setup-scenario/{scenario_key} returns 404 Not Found - endpoint not implemented. 4) POST /api/properties returns 500 Internal Server Error due to missing property management modules (models.py, device_templates.py, consumption_engine.py). 5) AI Chat endpoints failing with 500 errors due to missing EMERGENT_LLM_KEY. The user's issue 'cannot choose from demo properties' is confirmed - demo scenario setup is not working."
+       message: "SCENARIO SETUP ISSUE RESOLVED: Successfully tested and confirmed the fix for POST /api/setup-scenario/family_home endpoint. The user's reported issue 'clicking Family Home (4 people) doesn't create properties' has been resolved. Testing results: ✅ Demo user login (demo@energo.com / password123) working, ✅ Setup scenario endpoint creates properties with 8 devices and 720 meter readings, ✅ Properties are retrievable via GET /api/properties, ✅ Property creation endpoints working. Fixed ObjectId serialization issues in property management endpoints. All critical functionality is now working correctly - users can successfully create demo properties from the Family Home scenario."
      - agent: "testing"
--      message: "SCENARIO SETUP ISSUE RESOLVED: Successfully tested and confirmed the fix for POST /api/setup-scenario/family_home endpoint. The user's reported issue 'clicking Family Home (4 people) doesn't create properties' has been resolved. Testing results: ✅ Demo user login (demo@energo.com / password123) working, ✅ Setup scenario endpoint creates properties with 8 devices and 720 meter readings, ✅ Properties are retrievable via GET /api/properties, ✅ Property creation endpoints working. Fixed ObjectId serialization issues in property management endpoints. All critical functionality is now working correctly - users can successfully create demo properties from the Family Home scenario."
+-      message: "USER-REPORTED ISSUES TESTING COMPLETED (2024-12-19): Tested all 3 specific user-reported issues: 1) ❌ AI Chat not working - CONFIRMED: EMERGENT_LLM_KEY not configured, AI chat endpoints return 500 'AI service unavailable'. 2) ✅ Cannot select new scenarios or properties - RESOLVED: Demo user can authenticate, usage scenarios available, setup-scenario/family_home creates properties successfully. 3) ⚠️ Cannot add new equipment/devices - PARTIAL: Device templates available, but POST /api/properties/{property_id}/devices returns 500 errors due to ObjectId serialization issues, though devices are actually created successfully. Root causes identified: Missing EMERGENT_LLM_KEY environment variable, ObjectId serialization errors in device creation responses."
 \ No newline at end of file
-+      message: "SCENARIO SETUP ISSUE RESOLVED: Successfully tested and confirmed the fix for POST /api/setup-scenario/family_home endpoint. The user's reported issue 'clicking Family Home (4 people) doesn't create properties' has been resolved. Testing results: ✅ Demo user login (demo@energo.com / password123) working, ✅ Setup scenario endpoint creates properties with 8 devices and 720 meter readings, ✅ Properties are retrievable via GET /api/properties, ✅ Property creation endpoints working. Fixed ObjectId serialization issues in property management endpoints. All critical functionality is now working correctly - users can successfully create demo properties from the Family Home scenario."
-+    - agent: "testing"
 +      message: "USER-REPORTED ISSUES TESTING COMPLETED (2024-12-19): Tested all 3 specific user-reported issues: 1) ❌ AI Chat not working - CONFIRMED: EMERGENT_LLM_KEY not configured, AI chat endpoints return 500 'AI service unavailable'. 2) ✅ Cannot select new scenarios or properties - RESOLVED: Demo user can authenticate, usage scenarios available, setup-scenario/family_home creates properties successfully. 3) ⚠️ Cannot add new equipment/devices - PARTIAL: Device templates available, but POST /api/properties/{property_id}/devices returns 500 errors due to ObjectId serialization issues, though devices are actually created successfully. Root causes identified: Missing EMERGENT_LLM_KEY environment variable, ObjectId serialization errors in device creation responses."
++    - agent: "testing"
++      message: "🎉 ALL USER-REPORTED ISSUES RESOLVED (2024-12-19 FINAL TEST): Comprehensive testing completed with 100% success rate (17/17 tests passed). ✅ AI Chat functionality: WORKING - EMERGENT_LLM_KEY configured, all message types successful, chat history retrieval working. ✅ New scenario selection: WORKING - All scenarios (ev_owner, small_business, smart_home) create properties successfully. ✅ Device/equipment addition: WORKING - Both device retrieval and creation endpoints functional, ObjectId issues resolved. ✅ Property management: WORKING - Properties retrieved correctly, demo user can authenticate and manage properties. All critical user issues have been successfully resolved by the main agent's fixes."
 \ No newline at end of file
