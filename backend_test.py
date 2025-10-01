@@ -739,6 +739,267 @@ class EnergoBackendTester:
             
         return False
 
+    def test_property_management_status(self):
+        """Test property management feature status"""
+        print("\n🏠 Testing Property Management Status...")
+        
+        try:
+            response = self.session.get(
+                f"{self.base_url}/property-management-status",
+                timeout=30
+            )
+            
+            if response.status_code == 200:
+                data = response.json()
+                enabled = data.get("enabled", False)
+                message = data.get("message", "No message")
+                
+                self.log_result("Property Management Status", enabled, message)
+                return enabled
+            else:
+                self.log_result("Property Management Status", False, f"Status check failed with {response.status_code}")
+                return False
+                
+        except Exception as e:
+            self.log_result("Property Management Status", False, f"Status check failed: {str(e)}")
+            return False
+
+    def test_usage_scenarios_endpoint(self):
+        """Test GET /api/usage-scenarios endpoint"""
+        print("\n📋 Testing Usage Scenarios Endpoint...")
+        
+        try:
+            response = self.session.get(
+                f"{self.base_url}/usage-scenarios",
+                timeout=30
+            )
+            
+            if response.status_code == 200:
+                data = response.json()
+                scenarios = data.get("scenarios", {})
+                
+                if scenarios:
+                    scenario_count = len(scenarios)
+                    scenario_names = list(scenarios.keys())
+                    self.log_result("Usage Scenarios", True, 
+                                  f"Retrieved {scenario_count} scenarios: {', '.join(scenario_names)}")
+                    
+                    # Check for expected demo scenarios
+                    expected_scenarios = ["family_home", "ev_owner", "small_apartment", "large_house"]
+                    found_scenarios = [s for s in expected_scenarios if s in scenarios]
+                    if found_scenarios:
+                        self.log_result("Demo Scenarios Available", True, 
+                                      f"Found demo scenarios: {', '.join(found_scenarios)}")
+                        return True
+                    else:
+                        self.log_result("Demo Scenarios Available", False, 
+                                      f"No expected demo scenarios found. Available: {', '.join(scenario_names)}")
+                        return False
+                else:
+                    self.log_result("Usage Scenarios", False, "No scenarios returned")
+                    return False
+            else:
+                self.log_result("Usage Scenarios", False, 
+                              f"Request failed with status {response.status_code}: {response.text}")
+                return False
+                
+        except Exception as e:
+            self.log_result("Usage Scenarios", False, f"Request failed: {str(e)}")
+            return False
+
+    def test_device_templates_endpoint(self):
+        """Test GET /api/device-templates endpoint"""
+        print("\n🔌 Testing Device Templates Endpoint...")
+        
+        try:
+            response = self.session.get(
+                f"{self.base_url}/device-templates",
+                timeout=30
+            )
+            
+            if response.status_code == 200:
+                data = response.json()
+                common_devices = data.get("common_devices", [])
+                by_category = data.get("by_category", {})
+                all_templates = data.get("all_templates", [])
+                
+                if common_devices or by_category or all_templates:
+                    self.log_result("Device Templates", True, 
+                                  f"Retrieved {len(common_devices)} common devices, "
+                                  f"{len(by_category)} categories, {len(all_templates)} total templates")
+                    
+                    # Check categories
+                    if by_category:
+                        categories = list(by_category.keys())
+                        self.log_result("Device Categories", True, 
+                                      f"Available categories: {', '.join(categories)}")
+                    
+                    return True
+                else:
+                    self.log_result("Device Templates", False, "No device templates returned")
+                    return False
+            else:
+                self.log_result("Device Templates", False, 
+                              f"Request failed with status {response.status_code}: {response.text}")
+                return False
+                
+        except Exception as e:
+            self.log_result("Device Templates", False, f"Request failed: {str(e)}")
+            return False
+
+    def test_properties_get_endpoint(self):
+        """Test GET /api/properties endpoint (authenticated)"""
+        print("\n🏠 Testing Properties GET Endpoint...")
+        
+        if not self.auth_token:
+            self.log_result("Properties GET", False, "No authentication token available")
+            return False
+        
+        try:
+            headers = {
+                "Authorization": f"Bearer {self.auth_token}",
+                "Content-Type": "application/json"
+            }
+            
+            response = self.session.get(
+                f"{self.base_url}/properties",
+                headers=headers,
+                timeout=30
+            )
+            
+            if response.status_code == 200:
+                data = response.json()
+                properties = data.get("properties", [])
+                
+                self.log_result("Properties GET", True, 
+                              f"Retrieved {len(properties)} properties for user")
+                
+                if properties:
+                    # Show details of first property
+                    first_property = properties[0]
+                    property_name = first_property.get("name", "Unknown")
+                    property_type = first_property.get("property_type", "Unknown")
+                    self.log_result("Property Details", True, 
+                                  f"Sample property: {property_name} ({property_type})")
+                
+                return True
+            elif response.status_code == 401:
+                self.log_result("Properties GET", False, "Authentication failed - invalid token")
+                return False
+            else:
+                self.log_result("Properties GET", False, 
+                              f"Request failed with status {response.status_code}: {response.text}")
+                return False
+                
+        except Exception as e:
+            self.log_result("Properties GET", False, f"Request failed: {str(e)}")
+            return False
+
+    def test_setup_scenario_endpoint(self):
+        """Test POST /api/setup-scenario/{scenario_key} endpoint"""
+        print("\n🎯 Testing Setup Scenario Endpoint...")
+        
+        if not self.auth_token:
+            self.log_result("Setup Scenario", False, "No authentication token available")
+            return False
+        
+        # Try to setup a family home scenario
+        scenario_key = "family_home"
+        
+        try:
+            headers = {
+                "Authorization": f"Bearer {self.auth_token}",
+                "Content-Type": "application/json"
+            }
+            
+            response = self.session.post(
+                f"{self.base_url}/setup-scenario/{scenario_key}",
+                headers=headers,
+                timeout=30
+            )
+            
+            if response.status_code == 200:
+                data = response.json()
+                property_id = data.get("property_id")
+                devices_created = data.get("devices_created", 0)
+                
+                self.log_result("Setup Scenario", True, 
+                              f"Successfully created {scenario_key} scenario with {devices_created} devices")
+                
+                if property_id:
+                    self.log_result("Demo Property Creation", True, f"Created demo property with ID: {property_id}")
+                
+                return True
+            elif response.status_code == 401:
+                self.log_result("Setup Scenario", False, "Authentication failed - invalid token")
+                return False
+            elif response.status_code == 404:
+                self.log_result("Setup Scenario", False, f"Scenario '{scenario_key}' not found")
+                return False
+            else:
+                self.log_result("Setup Scenario", False, 
+                              f"Request failed with status {response.status_code}: {response.text}")
+                return False
+                
+        except Exception as e:
+            self.log_result("Setup Scenario", False, f"Request failed: {str(e)}")
+            return False
+
+    def test_create_property_endpoint(self):
+        """Test POST /api/properties endpoint"""
+        print("\n🏗️ Testing Create Property Endpoint...")
+        
+        if not self.auth_token:
+            self.log_result("Create Property", False, "No authentication token available")
+            return False
+        
+        # Create a test property
+        property_data = {
+            "name": "Test Property",
+            "property_type": "house",
+            "address": "123 Test Street, Brussels, Belgium",
+            "size_m2": 120,
+            "bedrooms": 3,
+            "occupants": 2,
+            "construction_year": 2010
+        }
+        
+        try:
+            headers = {
+                "Authorization": f"Bearer {self.auth_token}",
+                "Content-Type": "application/json"
+            }
+            
+            response = self.session.post(
+                f"{self.base_url}/properties",
+                json=property_data,
+                headers=headers,
+                timeout=30
+            )
+            
+            if response.status_code == 200:
+                data = response.json()
+                property_id = data.get("property_id") or data.get("id")
+                
+                self.log_result("Create Property", True, 
+                              f"Successfully created property: {property_data['name']}")
+                
+                if property_id:
+                    self.log_result("Property Creation ID", True, f"Property created with ID: {property_id}")
+                
+                return True
+            elif response.status_code == 401:
+                self.log_result("Create Property", False, "Authentication failed - invalid token")
+                return False
+            else:
+                self.log_result("Create Property", False, 
+                              f"Request failed with status {response.status_code}: {response.text}")
+                return False
+                
+        except Exception as e:
+            self.log_result("Create Property", False, f"Request failed: {str(e)}")
+            return False
+
     def test_unauthorized_access(self):
         """Test accessing protected endpoints without authentication"""
         print("\n🔒 Testing Unauthorized Access...")
