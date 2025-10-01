@@ -155,12 +155,13 @@ export default function Properties() {
 
       if (response.ok) {
         const data = await response.json();
-        setProperties(data);
+        const propertiesList = data.properties || data; // Handle both formats
+        setProperties(propertiesList);
         
         // Auto-select first property if available
-        if (data.length > 0 && !selectedProperty) {
-          setSelectedProperty(data[0]);
-          loadPropertyDevices(data[0].id);
+        if (propertiesList.length > 0 && !selectedProperty) {
+          setSelectedProperty(propertiesList[0]);
+          loadPropertyDevices(propertiesList[0].id);
         }
       } else if (response.status === 401) {
         router.replace('/');
