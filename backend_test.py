@@ -683,30 +683,55 @@ class EnergoBackendTester:
         print()
         
         # User issue analysis
-        print("🎯 USER ISSUE ANALYSIS:")
-        print("Issue: 'Clicking Family Home (4 people) doesn't create properties'")
+        print("🎯 USER-REPORTED ISSUES ANALYSIS:")
+        print("Testing all issues reported by user after main agent fixes:")
+        print("1. AI Chat functionality")
+        print("2. New scenario selection") 
+        print("3. Device/equipment addition")
+        print("4. Property management")
         print()
         
-        setup_failed = "Setup Family Home Scenario" in self.results["critical_failures"]
+        # Check status of each user-reported issue
+        ai_chat_failed = "AI Chat Functionality Overall" in self.results["critical_failures"]
+        scenario_failed = "New Scenario Selection Overall" in self.results["critical_failures"]
+        device_failed = "Device Creation" in self.results["critical_failures"]
         properties_failed = "Get Properties" in self.results["critical_failures"]
         login_failed = "Demo User Login" in self.results["critical_failures"]
         
         if login_failed:
             print("❌ ROOT CAUSE: Demo user authentication is failing")
             print("   SOLUTION: Fix demo user credentials or login endpoint")
-        elif setup_failed:
-            print("❌ ROOT CAUSE: POST /api/setup-scenario/family_home endpoint is failing")
-            print("   SOLUTION: Fix scenario setup endpoint implementation")
-        elif properties_failed:
-            print("❌ ROOT CAUSE: Properties are created but not visible via GET /api/properties")
-            print("   SOLUTION: Fix properties retrieval endpoint")
-        elif all_critical_passed:
-            print("✅ ISSUE RESOLVED: Family Home scenario setup is working correctly!")
-            print("   Users can now click 'Family Home (4 people)' and properties will be created")
-            print("   The demo user can authenticate and create/view properties successfully")
         else:
-            print("⚠️  PARTIAL SUCCESS: Some tests passed, some failed")
-            print("   Review individual test results above for specific issues")
+            # Analyze each issue
+            print("📊 ISSUE-BY-ISSUE STATUS:")
+            
+            if not ai_chat_failed:
+                print("  ✅ AI Chat functionality: WORKING")
+            else:
+                print("  ❌ AI Chat functionality: FAILING")
+                print("     - Check EMERGENT_LLM_KEY configuration")
+                print("     - Verify AI chat endpoints are properly implemented")
+            
+            if not scenario_failed:
+                print("  ✅ New scenario selection: WORKING")
+            else:
+                print("  ❌ New scenario selection: FAILING")
+                print("     - Check POST /api/setup-scenario/{scenario_key} endpoints")
+                print("     - Verify scenario creation logic")
+            
+            if not properties_failed:
+                print("  ✅ Property management: WORKING")
+            else:
+                print("  ❌ Property management: FAILING")
+                print("     - Check GET /api/properties endpoint")
+                print("     - Verify property retrieval logic")
+            
+            if not device_failed:
+                print("  ✅ Device/equipment addition: WORKING")
+            else:
+                print("  ❌ Device/equipment addition: FAILING")
+                print("     - Check POST /api/properties/{property_id}/devices endpoint")
+                print("     - Verify ObjectId serialization issues are fixed")
         
         print()
         
