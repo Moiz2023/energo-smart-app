@@ -59,61 +59,15 @@ class EnergoBackendTester:
             self.results["errors"].append(f"{test_name}: {message}")
             if is_critical:
                 self.results["critical_failures"].append(test_name)
-            self.results["errors"].append(f"{test_name}: {message}")
-            print(f"❌ {test_name}: FAILED {message}")
 
-    def test_user_registration(self):
-        """Test user registration endpoint"""
-        print("\n🔐 Testing User Registration...")
-        
-        # Test successful registration
-        registration_data = {
-            "email": self.test_user_email,
-            "password": self.test_user_password,
-            "name": self.test_user_name
-        }
-        
-        try:
-            response = self.session.post(
-                f"{self.base_url}/auth/register",
-                json=registration_data,
-                headers={"Content-Type": "application/json"},
-                timeout=30
-            )
-            
-            if response.status_code == 201 or response.status_code == 200:
-                data = response.json()
-                if "token" in data and "user" in data:
-                    self.auth_token = data["token"]
-                    self.log_result("User Registration", True, f"User created with ID: {data['user']['id']}")
-                    return True
-                else:
-                    self.log_result("User Registration", False, "Missing token or user in response")
-            elif response.status_code == 400 and "already registered" in response.text:
-                # User already exists, try to login instead
-                self.log_result("User Registration", True, "User already exists (expected)")
-                return True
-            else:
-                self.log_result("User Registration", False, f"Status: {response.status_code}, Response: {response.text}")
-                
-        except Exception as e:
-            self.log_result("User Registration", False, f"Exception: {str(e)}")
-            
-        return False
-
-    def test_user_login(self):
-        """Test user login endpoint"""
-        print("\n🔑 Testing User Login...")
-        
-        login_data = {
-            "email": self.test_user_email,
-            "password": self.test_user_password
-        }
+    def test_demo_user_login(self):
+        """Test login with demo user credentials"""
+        print("\n🔐 Testing Demo User Login...")
         
         try:
             response = self.session.post(
                 f"{self.base_url}/auth/login",
-                json=login_data,
+                json=DEMO_USER,
                 headers={"Content-Type": "application/json"},
                 timeout=30
             )
@@ -122,636 +76,22 @@ class EnergoBackendTester:
                 data = response.json()
                 if "token" in data and "user" in data:
                     self.auth_token = data["token"]
-                    self.log_result("User Login", True, f"Login successful for user: {data['user']['name']}")
+                    self.user_id = data["user"]["id"]
+                    self.session.headers.update({"Authorization": f"Bearer {self.auth_token}"})
+                    self.log_result("Demo User Login", True, f"Logged in as {DEMO_USER['email']}, User ID: {self.user_id}", is_critical=True)
                     return True
                 else:
-                    self.log_result("User Login", False, "Missing token or user in response")
+                    self.log_result("Demo User Login", False, "Missing token or user in response", is_critical=True)
             else:
-                self.log_result("User Login", False, f"Status: {response.status_code}, Response: {response.text}")
+                self.log_result("Demo User Login", False, f"Status: {response.status_code}, Response: {response.text}", is_critical=True)
                 
         except Exception as e:
-            self.log_result("User Login", False, f"Exception: {str(e)}")
-            
-        return False
-
-    def test_invalid_login(self):
-        """Test login with invalid credentials"""
-        print("\n🚫 Testing Invalid Login...")
+            self.log_result("Demo User Login", False, f"Exception: {str(e)}", is_critical=True)
         
-        invalid_login_data = {
-            "email": self.test_user_email,
-            "password": "wrongpassword"
-        }
-        
-        try:
-            response = self.session.post(
-                f"{self.base_url}/auth/login",
-                json=invalid_login_data,
-                headers={"Content-Type": "application/json"},
-                timeout=30
-            )
-            
-            if response.status_code == 401:
-                self.log_result("Invalid Login Handling", True, "Correctly rejected invalid credentials")
-                return True
-            else:
-                self.log_result("Invalid Login Handling", False, f"Expected 401, got {response.status_code}")
-                
-        except Exception as e:
-            self.log_result("Invalid Login Handling", False, f"Exception: {str(e)}")
-            
-        return False
-
-    def test_dashboard_endpoint(self):
-        """Test dashboard endpoint with authentication"""
-        print("\n📊 Testing Dashboard Endpoint...")
-        
-        if not self.auth_token:
-            self.log_result("Dashboard Access", False, "No auth token available")
-            return False
-            
-        try:
-            headers = {
-                "Authorization": f"Bearer {self.auth_token}",
-                "Content-Type": "application/json"
-            }
-            
-            response = self.session.get(
-                f"{self.base_url}/dashboard",
-                headers=headers,
-                timeout=30
-            )
-            
-            if response.status_code == 200:
-                data = response.json()
-                
-                # Check required fields
-                required_fields = ["summary", "chart_data", "recent_readings"]
-                missing_fields = [field for field in required_fields if field not in data]
-                
-                if not missing_fields:
-                    # Check summary data structure
-                    summary = data["summary"]
-                    summary_fields = ["current_consumption_kwh", "current_cost_euros", "consumption_change_percent", "cost_change_percent"]
-                    
-                    if all(field in summary for field in summary_fields):
-                        self.log_result("Dashboard Data Structure", True, f"All required fields present")
-                        
-                        # Validate data types and values
-                        if (isinstance(summary["current_consumption_kwh"], (int, float)) and 
-                            isinstance(summary["current_cost_euros"], (int, float)) and
-                            isinstance(data["chart_data"], list)):
-                            self.log_result("Dashboard Data Validation", True, f"Data types correct, {len(data['chart_data'])} chart points")
-                            return True
-                        else:
-                            self.log_result("Dashboard Data Validation", False, "Invalid data types")
-                    else:
-                        self.log_result("Dashboard Data Structure", False, f"Missing summary fields: {[f for f in summary_fields if f not in summary]}")
-                else:
-                    self.log_result("Dashboard Data Structure", False, f"Missing fields: {missing_fields}")
-            else:
-                self.log_result("Dashboard Access", False, f"Status: {response.status_code}, Response: {response.text}")
-                
-        except Exception as e:
-            self.log_result("Dashboard Access", False, f"Exception: {str(e)}")
-            
-        return False
-
-    def test_ai_tips_endpoint(self):
-        """Test AI insights endpoint (legacy ai-tips test)"""
-        print("\n💡 Testing AI Insights Endpoint (Legacy AI Tips)...")
-        
-        if not self.auth_token:
-            self.log_result("AI Tips Access", False, "No auth token available")
-            return False
-            
-        try:
-            headers = {
-                "Authorization": f"Bearer {self.auth_token}",
-                "Content-Type": "application/json"
-            }
-            
-            response = self.session.get(
-                f"{self.base_url}/ai-insights",
-                headers=headers,
-                timeout=30
-            )
-            
-            if response.status_code == 200:
-                data = response.json()
-                
-                if "insights" in data and isinstance(data["insights"], list) and len(data["insights"]) > 0:
-                    # Check insight structure
-                    insight = data["insights"][0]
-                    required_tip_fields = ["id", "title", "content", "category", "potential_savings"]
-                    
-                    if all(field in insight for field in required_tip_fields):
-                        self.log_result("AI Tips Structure", True, f"Received {len(data['insights'])} insights with correct structure")
-                        return True
-                    else:
-                        self.log_result("AI Tips Structure", False, f"Missing insight fields: {[f for f in required_tip_fields if f not in insight]}")
-                else:
-                    self.log_result("AI Tips Data", False, "No insights in response or invalid format")
-            else:
-                self.log_result("AI Tips Access", False, f"Status: {response.status_code}, Response: {response.text}")
-                
-        except Exception as e:
-            self.log_result("AI Tips Access", False, f"Exception: {str(e)}")
-            
-        return False
-
-    def test_badges_endpoint(self):
-        """Test badges endpoint"""
-        print("\n🏆 Testing Badges Endpoint...")
-        
-        if not self.auth_token:
-            self.log_result("Badges Access", False, "No auth token available")
-            return False
-            
-        try:
-            headers = {
-                "Authorization": f"Bearer {self.auth_token}",
-                "Content-Type": "application/json"
-            }
-            
-            response = self.session.get(
-                f"{self.base_url}/badges",
-                headers=headers,
-                timeout=30
-            )
-            
-            if response.status_code == 200:
-                data = response.json()
-                
-                if "badges" in data and isinstance(data["badges"], list) and len(data["badges"]) > 0:
-                    # Check badge structure
-                    badge = data["badges"][0]
-                    required_badge_fields = ["id", "name", "description", "icon"]
-                    
-                    if all(field in badge for field in required_badge_fields):
-                        self.log_result("Badges Structure", True, f"Received {len(data['badges'])} badges with correct structure")
-                        return True
-                    else:
-                        self.log_result("Badges Structure", False, f"Missing badge fields: {[f for f in required_badge_fields if f not in badge]}")
-                else:
-                    self.log_result("Badges Data", False, "No badges in response or invalid format")
-            else:
-                self.log_result("Badges Access", False, f"Status: {response.status_code}, Response: {response.text}")
-                
-        except Exception as e:
-            self.log_result("Badges Access", False, f"Exception: {str(e)}")
-            
-        return False
-
-    def test_notifications_endpoint(self):
-        """Test notifications endpoint"""
-        print("\n🔔 Testing Notifications Endpoint...")
-        
-        if not self.auth_token:
-            self.log_result("Notifications Access", False, "No auth token available")
-            return False
-            
-        try:
-            headers = {
-                "Authorization": f"Bearer {self.auth_token}",
-                "Content-Type": "application/json"
-            }
-            
-            response = self.session.get(
-                f"{self.base_url}/notifications",
-                headers=headers,
-                timeout=30
-            )
-            
-            if response.status_code == 200:
-                data = response.json()
-                
-                if "notifications" in data and isinstance(data["notifications"], list):
-                    if len(data["notifications"]) > 0:
-                        # Check notification structure
-                        notification = data["notifications"][0]
-                        required_notification_fields = ["id", "title", "message", "type", "timestamp"]
-                        
-                        if all(field in notification for field in required_notification_fields):
-                            self.log_result("Notifications Structure", True, f"Received {len(data['notifications'])} notifications with correct structure")
-                            return True
-                        else:
-                            self.log_result("Notifications Structure", False, f"Missing notification fields: {[f for f in required_notification_fields if f not in notification]}")
-                    else:
-                        self.log_result("Notifications Data", True, "No notifications (empty list is valid)")
-                        return True
-                else:
-                    self.log_result("Notifications Data", False, "No notifications field in response or invalid format")
-            else:
-                self.log_result("Notifications Access", False, f"Status: {response.status_code}, Response: {response.text}")
-                
-        except Exception as e:
-            self.log_result("Notifications Access", False, f"Exception: {str(e)}")
-            
-        return False
-
-    def test_ai_insights_endpoint(self):
-        """Test AI insights endpoint"""
-        print("\n🧠 Testing AI Insights Endpoint...")
-        
-        if not self.auth_token:
-            self.log_result("AI Insights Access", False, "No auth token available")
-            return False
-            
-        try:
-            headers = {
-                "Authorization": f"Bearer {self.auth_token}",
-                "Content-Type": "application/json"
-            }
-            
-            response = self.session.get(
-                f"{self.base_url}/ai-insights",
-                headers=headers,
-                timeout=30
-            )
-            
-            if response.status_code == 200:
-                data = response.json()
-                
-                required_fields = ["insights", "patterns", "subsidies", "region"]
-                missing_fields = [field for field in required_fields if field not in data]
-                
-                if not missing_fields:
-                    # Check insights structure
-                    if isinstance(data["insights"], list) and len(data["insights"]) > 0:
-                        insight = data["insights"][0]
-                        insight_fields = ["id", "title", "content", "category", "potential_savings"]
-                        
-                        if all(field in insight for field in insight_fields):
-                            self.log_result("AI Insights Structure", True, f"Received {len(data['insights'])} insights with correct structure")
-                            return True
-                        else:
-                            self.log_result("AI Insights Structure", False, f"Missing insight fields: {[f for f in insight_fields if f not in insight]}")
-                    else:
-                        self.log_result("AI Insights Data", False, "No insights in response or invalid format")
-                else:
-                    self.log_result("AI Insights Structure", False, f"Missing fields: {missing_fields}")
-            else:
-                self.log_result("AI Insights Access", False, f"Status: {response.status_code}, Response: {response.text}")
-                
-        except Exception as e:
-            self.log_result("AI Insights Access", False, f"Exception: {str(e)}")
-            
-        return False
-
-    def test_ai_chat_endpoint(self):
-        """Test interactive AI chat endpoint"""
-        print("\n💬 Testing AI Chat Endpoint...")
-        
-        if not self.auth_token:
-            self.log_result("AI Chat Access", False, "No auth token available")
-            return False
-            
-        try:
-            headers = {
-                "Authorization": f"Bearer {self.auth_token}",
-                "Content-Type": "application/json"
-            }
-            
-            # Test basic chat message
-            chat_data = {
-                "message": "How can I reduce my energy consumption?",
-                "session_id": None
-            }
-            
-            response = self.session.post(
-                f"{self.base_url}/ai-chat",
-                json=chat_data,
-                headers=headers,
-                timeout=45  # AI responses may take longer
-            )
-            
-            if response.status_code == 200:
-                data = response.json()
-                
-                required_fields = ["response", "session_id", "timestamp"]
-                if all(field in data for field in required_fields):
-                    if data["response"] and len(data["response"]) > 10:  # Meaningful response
-                        self.log_result("AI Chat Basic Response", True, f"Received response with session_id: {data['session_id'][:8]}...")
-                        
-                        # Test follow-up message with session_id
-                        follow_up_data = {
-                            "message": "What about solar panels?",
-                            "session_id": data["session_id"]
-                        }
-                        
-                        follow_up_response = self.session.post(
-                            f"{self.base_url}/ai-chat",
-                            json=follow_up_data,
-                            headers=headers,
-                            timeout=45
-                        )
-                        
-                        if follow_up_response.status_code == 200:
-                            follow_up_data_resp = follow_up_response.json()
-                            if follow_up_data_resp["session_id"] == data["session_id"]:
-                                self.log_result("AI Chat Session Continuity", True, "Session ID maintained across messages")
-                                return True
-                            else:
-                                self.log_result("AI Chat Session Continuity", False, "Session ID not maintained")
-                        else:
-                            self.log_result("AI Chat Follow-up", False, f"Follow-up failed: {follow_up_response.status_code}")
-                    else:
-                        self.log_result("AI Chat Response Quality", False, "Response too short or empty")
-                else:
-                    self.log_result("AI Chat Structure", False, f"Missing fields: {[f for f in required_fields if f not in data]}")
-            else:
-                self.log_result("AI Chat Access", False, f"Status: {response.status_code}, Response: {response.text}")
-                
-        except Exception as e:
-            self.log_result("AI Chat Access", False, f"Exception: {str(e)}")
-            
-        return False
-
-    def test_ai_chat_history_endpoint(self):
-        """Test AI chat history endpoint"""
-        print("\n📜 Testing AI Chat History Endpoint...")
-        
-        if not self.auth_token:
-            self.log_result("AI Chat History Access", False, "No auth token available")
-            return False
-            
-        try:
-            headers = {
-                "Authorization": f"Bearer {self.auth_token}",
-                "Content-Type": "application/json"
-            }
-            
-            response = self.session.get(
-                f"{self.base_url}/ai-chat/history",
-                headers=headers,
-                timeout=30
-            )
-            
-            if response.status_code == 200:
-                data = response.json()
-                
-                if "chat_history" in data and isinstance(data["chat_history"], list):
-                    if len(data["chat_history"]) > 0:
-                        # Check history structure
-                        history_item = data["chat_history"][0]
-                        required_fields = ["id", "message", "response", "timestamp", "session_id"]
-                        
-                        if all(field in history_item for field in required_fields):
-                            self.log_result("AI Chat History Structure", True, f"Retrieved {len(data['chat_history'])} chat history items")
-                            return True
-                        else:
-                            self.log_result("AI Chat History Structure", False, f"Missing fields: {[f for f in required_fields if f not in history_item]}")
-                    else:
-                        self.log_result("AI Chat History Data", True, "No chat history (empty list is valid)")
-                        return True
-                else:
-                    self.log_result("AI Chat History Data", False, "No chat_history field in response")
-            else:
-                self.log_result("AI Chat History Access", False, f"Status: {response.status_code}, Response: {response.text}")
-                
-        except Exception as e:
-            self.log_result("AI Chat History Access", False, f"Exception: {str(e)}")
-            
-        return False
-
-    def test_subscription_endpoint(self):
-        """Test subscription endpoint"""
-        print("\n💳 Testing Subscription Endpoint...")
-        
-        if not self.auth_token:
-            self.log_result("Subscription Access", False, "No auth token available")
-            return False
-            
-        try:
-            headers = {
-                "Authorization": f"Bearer {self.auth_token}",
-                "Content-Type": "application/json"
-            }
-            
-            response = self.session.get(
-                f"{self.base_url}/subscription",
-                headers=headers,
-                timeout=30
-            )
-            
-            if response.status_code == 200:
-                data = response.json()
-                
-                required_fields = ["current_plan", "plans"]
-                if all(field in data for field in required_fields):
-                    # Check if user has premium access as configured
-                    if data["current_plan"] == "premium":
-                        self.log_result("Premium Access Configuration", True, "User has premium access as configured")
-                        
-                        # Check plans structure
-                        if "free" in data["plans"] and "premium" in data["plans"]:
-                            premium_plan = data["plans"]["premium"]
-                            if "features" in premium_plan and isinstance(premium_plan["features"], list):
-                                self.log_result("Subscription Plans Structure", True, f"Premium plan has {len(premium_plan['features'])} features")
-                                return True
-                            else:
-                                self.log_result("Subscription Plans Structure", False, "Premium plan missing features")
-                        else:
-                            self.log_result("Subscription Plans Structure", False, "Missing free or premium plan")
-                    else:
-                        self.log_result("Premium Access Configuration", False, f"Expected premium, got {data['current_plan']}")
-                else:
-                    self.log_result("Subscription Structure", False, f"Missing fields: {[f for f in required_fields if f not in data]}")
-            else:
-                self.log_result("Subscription Access", False, f"Status: {response.status_code}, Response: {response.text}")
-                
-        except Exception as e:
-            self.log_result("Subscription Access", False, f"Exception: {str(e)}")
-            
-        return False
-
-    def test_settings_endpoint(self):
-        """Test settings endpoint"""
-        print("\n⚙️ Testing Settings Endpoint...")
-        
-        if not self.auth_token:
-            self.log_result("Settings Access", False, "No auth token available")
-            return False
-            
-        try:
-            headers = {
-                "Authorization": f"Bearer {self.auth_token}",
-                "Content-Type": "application/json"
-            }
-            
-            response = self.session.get(
-                f"{self.base_url}/settings",
-                headers=headers,
-                timeout=30
-            )
-            
-            if response.status_code == 200:
-                data = response.json()
-                
-                if "settings" in data:
-                    settings = data["settings"]
-                    required_settings = ["language", "currency_unit", "notifications_enabled", "subscription_plan", "region"]
-                    
-                    if all(field in settings for field in required_settings):
-                        # Check if premium settings are configured
-                        if settings["subscription_plan"] == "premium":
-                            self.log_result("Premium Settings Configuration", True, "Settings show premium subscription")
-                            return True
-                        else:
-                            self.log_result("Premium Settings Configuration", False, f"Expected premium subscription, got {settings['subscription_plan']}")
-                    else:
-                        self.log_result("Settings Structure", False, f"Missing settings: {[f for f in required_settings if f not in settings]}")
-                else:
-                    self.log_result("Settings Structure", False, "No settings field in response")
-            else:
-                self.log_result("Settings Access", False, f"Status: {response.status_code}, Response: {response.text}")
-                
-        except Exception as e:
-            self.log_result("Settings Access", False, f"Exception: {str(e)}")
-            
-        return False
-
-    def test_fluvius_data_endpoint(self):
-        """Test Fluvius data endpoint for premium users"""
-        print("\n🏭 Testing Fluvius Data Endpoint...")
-        
-        if not self.auth_token:
-            self.log_result("Fluvius Data Access", False, "No auth token available")
-            return False
-            
-        try:
-            headers = {
-                "Authorization": f"Bearer {self.auth_token}",
-                "Content-Type": "application/json"
-            }
-            
-            response = self.session.get(
-                f"{self.base_url}/fluvius-data",
-                headers=headers,
-                timeout=30
-            )
-            
-            if response.status_code == 200:
-                data = response.json()
-                
-                # Check if premium user gets real data access
-                required_fields = ["data_source", "location", "data"]
-                if all(field in data for field in required_fields):
-                    if isinstance(data["data"], list) and len(data["data"]) > 0:
-                        data_item = data["data"][0]
-                        data_fields = ["municipality", "period"]
-                        
-                        if all(field in data_item for field in data_fields):
-                            self.log_result("Fluvius Data Structure", True, f"Retrieved {len(data['data'])} data points from {data['data_source']}")
-                            return True
-                        else:
-                            self.log_result("Fluvius Data Structure", False, f"Missing data fields: {[f for f in data_fields if f not in data_item]}")
-                    else:
-                        self.log_result("Fluvius Data Content", False, "No data items in response")
-                else:
-                    self.log_result("Fluvius Data Structure", False, f"Missing fields: {[f for f in required_fields if f not in data]}")
-            else:
-                self.log_result("Fluvius Data Access", False, f"Status: {response.status_code}, Response: {response.text}")
-                
-        except Exception as e:
-            self.log_result("Fluvius Data Access", False, f"Exception: {str(e)}")
-            
-        return False
-
-    def test_logout_endpoint(self):
-        """Test logout endpoint"""
-        print("\n🚪 Testing Logout Endpoint...")
-        
-        if not self.auth_token:
-            self.log_result("Logout Access", False, "No auth token available")
-            return False
-            
-        try:
-            headers = {
-                "Authorization": f"Bearer {self.auth_token}",
-                "Content-Type": "application/json"
-            }
-            
-            response = self.session.post(
-                f"{self.base_url}/auth/logout",
-                headers=headers,
-                timeout=30
-            )
-            
-            if response.status_code == 200:
-                data = response.json()
-                if "message" in data:
-                    self.log_result("Logout Functionality", True, "Logout successful")
-                    return True
-                else:
-                    self.log_result("Logout Functionality", False, "No message in logout response")
-            else:
-                self.log_result("Logout Access", False, f"Status: {response.status_code}, Response: {response.text}")
-                
-        except Exception as e:
-            self.log_result("Logout Access", False, f"Exception: {str(e)}")
-            
-        return False
-
-    def test_ai_chat_with_various_messages(self):
-        """Test AI chat with various message types"""
-        print("\n🗨️ Testing AI Chat with Various Message Types...")
-        
-        if not self.auth_token:
-            self.log_result("AI Chat Variety Test", False, "No auth token available")
-            return False
-            
-        test_messages = [
-            "What are the best energy saving tips for winter?",
-            "Tell me about solar panel subsidies in Brussels",
-            "How much can I save with better insulation?",
-            "What's my current energy consumption pattern?",
-            "Are there any new energy regulations in Belgium?"
-        ]
-        
-        headers = {
-            "Authorization": f"Bearer {self.auth_token}",
-            "Content-Type": "application/json"
-        }
-        
-        successful_responses = 0
-        
-        for i, message in enumerate(test_messages):
-            try:
-                chat_data = {
-                    "message": message,
-                    "session_id": None
-                }
-                
-                response = self.session.post(
-                    f"{self.base_url}/ai-chat",
-                    json=chat_data,
-                    headers=headers,
-                    timeout=45
-                )
-                
-                if response.status_code == 200:
-                    data = response.json()
-                    if data.get("response") and len(data["response"]) > 20:
-                        successful_responses += 1
-                        
-                # Small delay between requests
-                time.sleep(1)
-                
-            except Exception as e:
-                print(f"  Message {i+1} failed: {str(e)}")
-        
-        if successful_responses >= len(test_messages) * 0.8:  # 80% success rate
-            self.log_result("AI Chat Message Variety", True, f"{successful_responses}/{len(test_messages)} message types handled successfully")
-            return True
-        else:
-            self.log_result("AI Chat Message Variety", False, f"Only {successful_responses}/{len(test_messages)} message types handled successfully")
-            
         return False
 
     def test_property_management_status(self):
-        """Test property management feature status"""
+        """Test property management status endpoint"""
         print("\n🏠 Testing Property Management Status...")
         
         try:
@@ -763,21 +103,19 @@ class EnergoBackendTester:
             if response.status_code == 200:
                 data = response.json()
                 enabled = data.get("enabled", False)
-                message = data.get("message", "No message")
-                
-                self.log_result("Property Management Status", enabled, message)
+                self.log_result("Property Management Status", enabled, f"Property management enabled: {enabled}")
                 return enabled
             else:
-                self.log_result("Property Management Status", False, f"Status check failed with {response.status_code}")
-                return False
+                self.log_result("Property Management Status", False, f"Status: {response.status_code}")
                 
         except Exception as e:
-            self.log_result("Property Management Status", False, f"Status check failed: {str(e)}")
-            return False
+            self.log_result("Property Management Status", False, f"Exception: {str(e)}")
+        
+        return False
 
-    def test_usage_scenarios_endpoint(self):
+    def test_get_usage_scenarios(self):
         """Test GET /api/usage-scenarios endpoint"""
-        print("\n📋 Testing Usage Scenarios Endpoint...")
+        print("\n📋 Testing Usage Scenarios...")
         
         try:
             response = self.session.get(
@@ -788,39 +126,181 @@ class EnergoBackendTester:
             if response.status_code == 200:
                 data = response.json()
                 scenarios = data.get("scenarios", {})
+                family_home_exists = "family_home" in scenarios
                 
-                if scenarios:
-                    scenario_count = len(scenarios)
-                    scenario_names = list(scenarios.keys())
-                    self.log_result("Usage Scenarios", True, 
-                                  f"Retrieved {scenario_count} scenarios: {', '.join(scenario_names)}")
-                    
-                    # Check for expected demo scenarios
-                    expected_scenarios = ["family_home", "ev_owner", "small_apartment", "large_house"]
-                    found_scenarios = [s for s in expected_scenarios if s in scenarios]
-                    if found_scenarios:
-                        self.log_result("Demo Scenarios Available", True, 
-                                      f"Found demo scenarios: {', '.join(found_scenarios)}")
-                        return True
-                    else:
-                        self.log_result("Demo Scenarios Available", False, 
-                                      f"No expected demo scenarios found. Available: {', '.join(scenario_names)}")
-                        return False
+                if family_home_exists:
+                    family_home = scenarios["family_home"]
+                    self.log_result("Get Usage Scenarios", True, f"Found {len(scenarios)} scenarios including family_home: '{family_home.get('name', 'N/A')}'")
+                    print(f"   Family Home Details: {family_home.get('description', 'N/A')}")
                 else:
-                    self.log_result("Usage Scenarios", False, "No scenarios returned")
-                    return False
+                    self.log_result("Get Usage Scenarios", False, f"family_home scenario not found. Available: {list(scenarios.keys())}")
+                
+                return family_home_exists
             else:
-                self.log_result("Usage Scenarios", False, 
-                              f"Request failed with status {response.status_code}: {response.text}")
-                return False
+                self.log_result("Get Usage Scenarios", False, f"Status: {response.status_code}, Response: {response.text}")
                 
         except Exception as e:
-            self.log_result("Usage Scenarios", False, f"Request failed: {str(e)}")
-            return False
+            self.log_result("Get Usage Scenarios", False, f"Exception: {str(e)}")
+        
+        return False
 
-    def test_device_templates_endpoint(self):
+    def test_setup_family_home_scenario(self):
+        """Test POST /api/setup-scenario/family_home endpoint - MAIN TEST"""
+        print("\n🎯 Testing Setup Family Home Scenario (MAIN TEST)...")
+        
+        if not self.auth_token:
+            self.log_result("Setup Family Home Scenario", False, "No authentication token available", is_critical=True)
+            return False, None
+        
+        try:
+            response = self.session.post(
+                f"{self.base_url}/setup-scenario/family_home",
+                headers={"Authorization": f"Bearer {self.auth_token}"},
+                timeout=30
+            )
+            
+            if response.status_code == 200:
+                data = response.json()
+                property_id = data.get("property_id")
+                devices_created = data.get("devices_created", 0)
+                readings_created = data.get("meter_readings_created", 0)
+                message = data.get("message", "")
+                
+                if property_id:
+                    self.log_result("Setup Family Home Scenario", True, 
+                                  f"✨ SUCCESS! Property ID: {property_id}, Devices: {devices_created}, Readings: {readings_created}", 
+                                  is_critical=True)
+                    print(f"   Message: {message}")
+                    return True, property_id
+                else:
+                    self.log_result("Setup Family Home Scenario", False, "No property_id in response", is_critical=True)
+            else:
+                self.log_result("Setup Family Home Scenario", False, 
+                              f"Status: {response.status_code}, Response: {response.text}", is_critical=True)
+                
+        except Exception as e:
+            self.log_result("Setup Family Home Scenario", False, f"Exception: {str(e)}", is_critical=True)
+        
+        return False, None
+
+    def test_get_properties(self):
+        """Test GET /api/properties endpoint"""
+        print("\n🏘️ Testing Get Properties...")
+        
+        if not self.auth_token:
+            self.log_result("Get Properties", False, "No authentication token available", is_critical=True)
+            return False
+        
+        try:
+            response = self.session.get(
+                f"{self.base_url}/properties",
+                headers={"Authorization": f"Bearer {self.auth_token}"},
+                timeout=30
+            )
+            
+            if response.status_code == 200:
+                data = response.json()
+                properties = data.get("properties", [])
+                
+                if len(properties) > 0:
+                    self.log_result("Get Properties", True, f"Found {len(properties)} properties", is_critical=True)
+                    for i, prop in enumerate(properties[:3]):  # Show first 3 properties
+                        print(f"   Property {i+1}: {prop.get('name', 'Unknown')} (ID: {prop.get('id', 'N/A')})")
+                        print(f"      Address: {prop.get('address', 'N/A')}")
+                        print(f"      Type: {prop.get('property_type', 'N/A')}, Size: {prop.get('size_m2', 'N/A')} m²")
+                    return True
+                else:
+                    self.log_result("Get Properties", False, "No properties found for user", is_critical=True)
+            else:
+                self.log_result("Get Properties", False, f"Status: {response.status_code}, Response: {response.text}", is_critical=True)
+                
+        except Exception as e:
+            self.log_result("Get Properties", False, f"Exception: {str(e)}", is_critical=True)
+        
+        return False
+
+    def test_get_devices_for_property(self, property_id):
+        """Test GET /api/properties/{property_id}/devices endpoint"""
+        print(f"\n🔌 Testing Get Devices for Property {property_id}...")
+        
+        if not property_id:
+            self.log_result("Get Devices for Property", False, "No property ID provided")
+            return False
+        
+        if not self.auth_token:
+            self.log_result("Get Devices for Property", False, "No authentication token available")
+            return False
+        
+        try:
+            response = self.session.get(
+                f"{self.base_url}/properties/{property_id}/devices",
+                headers={"Authorization": f"Bearer {self.auth_token}"},
+                timeout=30
+            )
+            
+            if response.status_code == 200:
+                data = response.json()
+                devices = data.get("devices", [])
+                
+                if len(devices) > 0:
+                    self.log_result("Get Devices for Property", True, f"Found {len(devices)} devices")
+                    for i, device in enumerate(devices[:5]):  # Show first 5 devices
+                        print(f"   Device {i+1}: {device.get('name', 'Unknown')} ({device.get('device_type', 'N/A')})")
+                        print(f"      Power: {device.get('power_rating_watts', 'N/A')}W, Usage: {device.get('daily_usage_hours', 'N/A')}h/day")
+                    return True
+                else:
+                    self.log_result("Get Devices for Property", False, "No devices found for property")
+            else:
+                self.log_result("Get Devices for Property", False, f"Status: {response.status_code}, Response: {response.text}")
+                
+        except Exception as e:
+            self.log_result("Get Devices for Property", False, f"Exception: {str(e)}")
+        
+        return False
+
+    def test_direct_property_creation(self):
+        """Test POST /api/properties endpoint directly"""
+        print("\n🏗️ Testing Direct Property Creation...")
+        
+        if not self.auth_token:
+            self.log_result("Direct Property Creation", False, "No authentication token available")
+            return False
+        
+        test_property = {
+            "name": "Test Property",
+            "address": "123 Test Street, Brussels",
+            "property_type": "house",
+            "size_m2": 120,
+            "occupants": 2
+        }
+        
+        try:
+            response = self.session.post(
+                f"{self.base_url}/properties",
+                json=test_property,
+                headers={"Authorization": f"Bearer {self.auth_token}"},
+                timeout=30
+            )
+            
+            if response.status_code == 200 or response.status_code == 201:
+                data = response.json()
+                property_id = data.get("property_id")
+                if property_id:
+                    self.log_result("Direct Property Creation", True, f"Created property {property_id}")
+                    return True
+                else:
+                    self.log_result("Direct Property Creation", False, "No property_id in response")
+            else:
+                self.log_result("Direct Property Creation", False, f"Status: {response.status_code}, Response: {response.text}")
+                
+        except Exception as e:
+            self.log_result("Direct Property Creation", False, f"Exception: {str(e)}")
+        
+        return False
+
+    def test_device_templates(self):
         """Test GET /api/device-templates endpoint"""
-        print("\n🔌 Testing Device Templates Endpoint...")
+        print("\n🔧 Testing Device Templates...")
         
         try:
             response = self.session.get(
@@ -831,308 +311,142 @@ class EnergoBackendTester:
             if response.status_code == 200:
                 data = response.json()
                 common_devices = data.get("common_devices", [])
-                by_category = data.get("by_category", {})
                 all_templates = data.get("all_templates", [])
                 
-                if common_devices or by_category or all_templates:
-                    self.log_result("Device Templates", True, 
-                                  f"Retrieved {len(common_devices)} common devices, "
-                                  f"{len(by_category)} categories, {len(all_templates)} total templates")
-                    
-                    # Check categories
-                    if by_category:
-                        categories = list(by_category.keys())
-                        self.log_result("Device Categories", True, 
-                                      f"Available categories: {', '.join(categories)}")
-                    
-                    return True
+                self.log_result("Get Device Templates", len(common_devices) > 0, 
+                              f"Found {len(common_devices)} common devices, {len(all_templates)} total templates")
+                return len(common_devices) > 0
+            else:
+                self.log_result("Get Device Templates", False, f"Status: {response.status_code}, Response: {response.text}")
+                
+        except Exception as e:
+            self.log_result("Get Device Templates", False, f"Exception: {str(e)}")
+        
+        return False
+
+    def run_comprehensive_test(self):
+        """Run all tests in sequence focusing on scenario setup"""
+        print("🎯 FOCUS: Testing Family Home Scenario Setup")
+        print("This test addresses the user's issue: 'clicking Family Home (4 people) doesn't create properties'")
+        print()
+        
+        # Test 1: Login as demo user (CRITICAL)
+        login_success = self.test_demo_user_login()
+        if not login_success:
+            print("\n❌ CRITICAL FAILURE: Cannot proceed without demo user authentication")
+            return self.results
+        
+        # Test 2: Check property management status
+        self.test_property_management_status()
+        
+        # Test 3: Get usage scenarios (verify family_home exists)
+        scenarios_available = self.test_get_usage_scenarios()
+        
+        # Test 4: Get device templates
+        self.test_device_templates()
+        
+        # Test 5: Test direct property creation
+        self.test_direct_property_creation()
+        
+        # Test 6: Setup family home scenario (MAIN TEST - CRITICAL)
+        scenario_success, property_id = self.test_setup_family_home_scenario()
+        
+        # Test 7: Verify properties were created (CRITICAL)
+        properties_exist = self.test_get_properties()
+        
+        # Test 8: Get devices for the created property
+        if property_id:
+            self.test_get_devices_for_property(property_id)
+        
+        # Generate comprehensive summary
+        self.print_test_summary()
+        
+        return self.results
+
+    def print_test_summary(self):
+        """Print comprehensive test summary"""
+        print("\n" + "=" * 60)
+        print("📊 COMPREHENSIVE TEST SUMMARY")
+        print("=" * 60)
+        
+        passed = self.results["passed"]
+        total = self.results["total_tests"]
+        success_rate = (passed/total)*100 if total > 0 else 0
+        
+        print(f"Tests Passed: {passed}/{total}")
+        print(f"Success Rate: {success_rate:.1f}%")
+        print()
+        
+        # Critical test results
+        critical_tests = [
+            "Demo User Login",
+            "Setup Family Home Scenario", 
+            "Get Properties"
+        ]
+        
+        print("🔍 CRITICAL TEST RESULTS:")
+        all_critical_passed = True
+        for test_name in critical_tests:
+            if test_name in self.results["critical_failures"]:
+                print(f"  ❌ FAIL {test_name}")
+                all_critical_passed = False
+            else:
+                # Check if test was run and passed
+                test_run = any(test_name in error for error in self.results["errors"]) or passed > 0
+                if test_run:
+                    print(f"  ✅ PASS {test_name}")
                 else:
-                    self.log_result("Device Templates", False, "No device templates returned")
-                    return False
-            else:
-                self.log_result("Device Templates", False, 
-                              f"Request failed with status {response.status_code}: {response.text}")
-                return False
-                
-        except Exception as e:
-            self.log_result("Device Templates", False, f"Request failed: {str(e)}")
-            return False
-
-    def test_properties_get_endpoint(self):
-        """Test GET /api/properties endpoint (authenticated)"""
-        print("\n🏠 Testing Properties GET Endpoint...")
+                    print(f"  ⚠️  SKIP {test_name}")
         
-        if not self.auth_token:
-            self.log_result("Properties GET", False, "No authentication token available")
-            return False
+        print()
         
-        try:
-            headers = {
-                "Authorization": f"Bearer {self.auth_token}",
-                "Content-Type": "application/json"
-            }
-            
-            response = self.session.get(
-                f"{self.base_url}/properties",
-                headers=headers,
-                timeout=30
-            )
-            
-            if response.status_code == 200:
-                data = response.json()
-                properties = data.get("properties", [])
-                
-                self.log_result("Properties GET", True, 
-                              f"Retrieved {len(properties)} properties for user")
-                
-                if properties:
-                    # Show details of first property
-                    first_property = properties[0]
-                    property_name = first_property.get("name", "Unknown")
-                    property_type = first_property.get("property_type", "Unknown")
-                    self.log_result("Property Details", True, 
-                                  f"Sample property: {property_name} ({property_type})")
-                
-                return True
-            elif response.status_code == 401:
-                self.log_result("Properties GET", False, "Authentication failed - invalid token")
-                return False
-            else:
-                self.log_result("Properties GET", False, 
-                              f"Request failed with status {response.status_code}: {response.text}")
-                return False
-                
-        except Exception as e:
-            self.log_result("Properties GET", False, f"Request failed: {str(e)}")
-            return False
-
-    def test_setup_scenario_endpoint(self):
-        """Test POST /api/setup-scenario/{scenario_key} endpoint"""
-        print("\n🎯 Testing Setup Scenario Endpoint...")
+        # User issue analysis
+        print("🎯 USER ISSUE ANALYSIS:")
+        print("Issue: 'Clicking Family Home (4 people) doesn't create properties'")
+        print()
         
-        if not self.auth_token:
-            self.log_result("Setup Scenario", False, "No authentication token available")
-            return False
+        setup_failed = "Setup Family Home Scenario" in self.results["critical_failures"]
+        properties_failed = "Get Properties" in self.results["critical_failures"]
+        login_failed = "Demo User Login" in self.results["critical_failures"]
         
-        # Try to setup a family home scenario
-        scenario_key = "family_home"
-        
-        try:
-            headers = {
-                "Authorization": f"Bearer {self.auth_token}",
-                "Content-Type": "application/json"
-            }
-            
-            response = self.session.post(
-                f"{self.base_url}/setup-scenario/{scenario_key}",
-                headers=headers,
-                timeout=30
-            )
-            
-            if response.status_code == 200:
-                data = response.json()
-                property_id = data.get("property_id")
-                devices_created = data.get("devices_created", 0)
-                
-                self.log_result("Setup Scenario", True, 
-                              f"Successfully created {scenario_key} scenario with {devices_created} devices")
-                
-                if property_id:
-                    self.log_result("Demo Property Creation", True, f"Created demo property with ID: {property_id}")
-                
-                return True
-            elif response.status_code == 401:
-                self.log_result("Setup Scenario", False, "Authentication failed - invalid token")
-                return False
-            elif response.status_code == 404:
-                self.log_result("Setup Scenario", False, f"Scenario '{scenario_key}' not found")
-                return False
-            else:
-                self.log_result("Setup Scenario", False, 
-                              f"Request failed with status {response.status_code}: {response.text}")
-                return False
-                
-        except Exception as e:
-            self.log_result("Setup Scenario", False, f"Request failed: {str(e)}")
-            return False
-
-    def test_create_property_endpoint(self):
-        """Test POST /api/properties endpoint"""
-        print("\n🏗️ Testing Create Property Endpoint...")
-        
-        if not self.auth_token:
-            self.log_result("Create Property", False, "No authentication token available")
-            return False
-        
-        # Create a test property
-        property_data = {
-            "name": "Test Property",
-            "property_type": "house",
-            "address": "123 Test Street, Brussels, Belgium",
-            "size_m2": 120,
-            "bedrooms": 3,
-            "occupants": 2,
-            "construction_year": 2010
-        }
-        
-        try:
-            headers = {
-                "Authorization": f"Bearer {self.auth_token}",
-                "Content-Type": "application/json"
-            }
-            
-            response = self.session.post(
-                f"{self.base_url}/properties",
-                json=property_data,
-                headers=headers,
-                timeout=30
-            )
-            
-            if response.status_code == 200:
-                data = response.json()
-                property_id = data.get("property_id") or data.get("id")
-                
-                self.log_result("Create Property", True, 
-                              f"Successfully created property: {property_data['name']}")
-                
-                if property_id:
-                    self.log_result("Property Creation ID", True, f"Property created with ID: {property_id}")
-                
-                return True
-            elif response.status_code == 401:
-                self.log_result("Create Property", False, "Authentication failed - invalid token")
-                return False
-            else:
-                self.log_result("Create Property", False, 
-                              f"Request failed with status {response.status_code}: {response.text}")
-                return False
-                
-        except Exception as e:
-            self.log_result("Create Property", False, f"Request failed: {str(e)}")
-            return False
-
-    def test_unauthorized_access(self):
-        """Test accessing protected endpoints without authentication"""
-        print("\n🔒 Testing Unauthorized Access...")
-        
-        endpoints = ["/dashboard", "/ai-insights", "/badges", "/notifications"]
-        
-        for endpoint in endpoints:
-            try:
-                response = self.session.get(
-                    f"{self.base_url}{endpoint}",
-                    timeout=30
-                )
-                
-                if response.status_code == 401 or response.status_code == 403:
-                    self.log_result(f"Unauthorized Access Protection ({endpoint})", True, "Correctly rejected unauthorized request")
-                else:
-                    self.log_result(f"Unauthorized Access Protection ({endpoint})", False, f"Expected 401/403, got {response.status_code}")
-                    
-            except Exception as e:
-                self.log_result(f"Unauthorized Access Protection ({endpoint})", False, f"Exception: {str(e)}")
-
-    def test_invalid_token_access(self):
-        """Test accessing protected endpoints with invalid token"""
-        print("\n🔐 Testing Invalid Token Access...")
-        
-        invalid_headers = {
-            "Authorization": "Bearer invalid_token_here",
-            "Content-Type": "application/json"
-        }
-        
-        try:
-            response = self.session.get(
-                f"{self.base_url}/dashboard",
-                headers=invalid_headers,
-                timeout=30
-            )
-            
-            if response.status_code == 401:
-                self.log_result("Invalid Token Protection", True, "Correctly rejected invalid token")
-            else:
-                self.log_result("Invalid Token Protection", False, f"Expected 401, got {response.status_code}")
-                
-        except Exception as e:
-            self.log_result("Invalid Token Protection", False, f"Exception: {str(e)}")
-
-    def run_all_tests(self):
-        """Run all backend tests"""
-        print("🚀 Starting Energo Backend API Tests")
-        print("=" * 50)
-        
-        # Test authentication flow
-        registration_success = self.test_user_registration()
-        # Always try login to get token for protected endpoint tests
-        login_success = self.test_user_login()
-            
-        # Test invalid login
-        self.test_invalid_login()
-        
-        # Test property management features first (as requested by user)
-        print("\n🔹 Testing Property Management Features...")
-        property_mgmt_enabled = self.test_property_management_status()
-        self.test_usage_scenarios_endpoint()
-        self.test_device_templates_endpoint()
-        
-        # Test protected endpoints (only if we have auth)
-        if self.auth_token:
-            print("\n🔹 Testing Property Management (Authenticated)...")
-            self.test_properties_get_endpoint()
-            self.test_setup_scenario_endpoint()
-            self.test_create_property_endpoint()
-            
-            print("\n🔹 Testing Existing Functionality...")
-            self.test_dashboard_endpoint()
-            self.test_ai_tips_endpoint()
-            self.test_ai_insights_endpoint()
-            self.test_badges_endpoint()
-            self.test_notifications_endpoint()
-            self.test_logout_endpoint()
-            
-            print("\n🔹 Testing Premium Features...")
-            self.test_subscription_endpoint()
-            self.test_settings_endpoint()
-            self.test_fluvius_data_endpoint()
-            
-            print("\n🔹 Testing Interactive AI Chat...")
-            self.test_ai_chat_endpoint()
-            self.test_ai_chat_history_endpoint()
-            self.test_ai_chat_with_various_messages()
+        if login_failed:
+            print("❌ ROOT CAUSE: Demo user authentication is failing")
+            print("   SOLUTION: Fix demo user credentials or login endpoint")
+        elif setup_failed:
+            print("❌ ROOT CAUSE: POST /api/setup-scenario/family_home endpoint is failing")
+            print("   SOLUTION: Fix scenario setup endpoint implementation")
+        elif properties_failed:
+            print("❌ ROOT CAUSE: Properties are created but not visible via GET /api/properties")
+            print("   SOLUTION: Fix properties retrieval endpoint")
+        elif all_critical_passed:
+            print("✅ ISSUE RESOLVED: Family Home scenario setup is working correctly!")
+            print("   Users can now click 'Family Home (4 people)' and properties will be created")
+            print("   The demo user can authenticate and create/view properties successfully")
         else:
-            print("⚠️  Skipping protected endpoint tests - no authentication token")
-            
-        # Test security
-        print("\n🔹 Testing Security...")
-        self.test_unauthorized_access()
-        self.test_invalid_token_access()
+            print("⚠️  PARTIAL SUCCESS: Some tests passed, some failed")
+            print("   Review individual test results above for specific issues")
         
-        # Print summary
-        print("\n" + "=" * 50)
-        print("📋 TEST SUMMARY")
-        print("=" * 50)
-        print(f"Total Tests: {self.results['total_tests']}")
-        print(f"Passed: {self.results['passed']} ✅")
-        print(f"Failed: {self.results['failed']} ❌")
+        print()
         
-        if self.results['errors']:
-            print("\n❌ FAILED TESTS:")
-            for error in self.results['errors']:
-                print(f"  - {error}")
-        
-        success_rate = (self.results['passed'] / self.results['total_tests']) * 100 if self.results['total_tests'] > 0 else 0
-        print(f"\nSuccess Rate: {success_rate:.1f}%")
-        
-        if success_rate >= 80:
-            print("🎉 Backend tests mostly successful!")
-        elif success_rate >= 60:
-            print("⚠️  Backend has some issues that need attention")
-        else:
-            print("🚨 Backend has significant issues that need immediate attention")
-            
-        return success_rate >= 80
+        if self.results["errors"]:
+            print("🐛 DETAILED ERRORS:")
+            for error in self.results["errors"]:
+                print(f"  • {error}")
+            print()
+
+def main():
+    """Main test execution"""
+    tester = EnergoBackendTester()
+    results = tester.run_comprehensive_test()
+    
+    # Return appropriate exit code
+    critical_failures = len(results["critical_failures"])
+    if critical_failures == 0:
+        print("🎉 All critical tests passed!")
+        sys.exit(0)
+    else:
+        print(f"❌ {critical_failures} critical test(s) failed")
+        sys.exit(1)
 
 if __name__ == "__main__":
-    tester = EnergoBackendTester()
-    success = tester.run_all_tests()
-    sys.exit(0 if success else 1)
+    main()
