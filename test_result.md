@@ -210,7 +210,7 @@ agent_communication:
   - agent: "testing"
     message: "Backend testing complete - all APIs working correctly. Fixed ObjectId serialization issue in dashboard endpoint. Ready for frontend testing if requested."
 
-user_problem_statement: "Test the Energo energy tracking app backend thoroughly. The app should have authentication system, energy tracking endpoints, database integration, and complete authentication flow."
+user_problem_statement: "Complete restoration of original Energo Smart application from GitHub and implement MVP property/device management enhancements step-by-step"
 
 backend:
   - task: "User Registration API"
