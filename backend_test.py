@@ -568,9 +568,12 @@ class EnergoBackendTester:
         return False
 
     def run_comprehensive_test(self):
-        """Run all tests in sequence focusing on scenario setup"""
-        print("🎯 FOCUS: Testing Family Home Scenario Setup")
-        print("This test addresses the user's issue: 'clicking Family Home (4 people) doesn't create properties'")
+        """Run all tests in sequence focusing on user-reported issues"""
+        print("🎯 FOCUS: Testing All User-Reported Issues After Main Agent Fixes")
+        print("1. AI Chat functionality (POST /api/ai-chat, GET /api/ai-chat/history)")
+        print("2. New scenario selection (POST /api/setup-scenario/{scenario_key})")
+        print("3. Device/equipment addition (POST /api/properties/{property_id}/devices)")
+        print("4. Property management (GET /api/properties)")
         print()
         
         # Test 1: Login as demo user (CRITICAL)
@@ -579,27 +582,63 @@ class EnergoBackendTester:
             print("\n❌ CRITICAL FAILURE: Cannot proceed without demo user authentication")
             return self.results
         
-        # Test 2: Check property management status
-        self.test_property_management_status()
+        # Test 2: AI Chat functionality (USER REPORTED ISSUE)
+        print("\n" + "="*60)
+        print("🤖 TESTING AI CHAT FUNCTIONALITY (USER REPORTED ISSUE)")
+        print("="*60)
+        self.test_ai_chat_functionality()
+        self.test_ai_chat_history()
         
-        # Test 3: Get usage scenarios (verify family_home exists)
-        scenarios_available = self.test_get_usage_scenarios()
+        # Test 3: New scenario selection (USER REPORTED ISSUE)
+        print("\n" + "="*60)
+        print("🏠 TESTING NEW SCENARIO SELECTION (USER REPORTED ISSUE)")
+        print("="*60)
+        self.test_new_scenario_selection()
         
-        # Test 4: Get device templates
-        self.test_device_templates()
-        
-        # Test 5: Test direct property creation
-        self.test_direct_property_creation()
-        
-        # Test 6: Setup family home scenario (MAIN TEST - CRITICAL)
-        scenario_success, property_id = self.test_setup_family_home_scenario()
-        
-        # Test 7: Verify properties were created (CRITICAL)
+        # Test 4: Property management (USER REPORTED ISSUE)
+        print("\n" + "="*60)
+        print("🏢 TESTING PROPERTY MANAGEMENT (USER REPORTED ISSUE)")
+        print("="*60)
         properties_exist = self.test_get_properties()
         
-        # Test 8: Get devices for the created property
-        if property_id:
-            self.test_get_devices_for_property(property_id)
+        # Test 5: Device/equipment addition (USER REPORTED ISSUE)
+        print("\n" + "="*60)
+        print("⚡ TESTING DEVICE/EQUIPMENT ADDITION (USER REPORTED ISSUE)")
+        print("="*60)
+        
+        # Get a property ID for device testing
+        property_id = None
+        if properties_exist:
+            # Try to get properties to find a property ID
+            try:
+                response = self.session.get(
+                    f"{self.base_url}/properties",
+                    headers={"Authorization": f"Bearer {self.auth_token}"},
+                    timeout=30
+                )
+                if response.status_code == 200:
+                    data = response.json()
+                    properties = data.get("properties", [])
+                    if properties:
+                        property_id = properties[0].get("id")
+            except:
+                pass
+        
+        # If no property exists, create one for testing
+        if not property_id:
+            print("No existing property found, creating one for device testing...")
+            scenario_success, property_id = self.test_setup_family_home_scenario()
+        
+        # Test device addition
+        self.test_device_equipment_addition(property_id)
+        
+        # Additional supporting tests
+        print("\n" + "="*60)
+        print("🔧 ADDITIONAL SUPPORTING TESTS")
+        print("="*60)
+        self.test_property_management_status()
+        self.test_get_usage_scenarios()
+        self.test_device_templates()
         
         # Generate comprehensive summary
         self.print_test_summary()
