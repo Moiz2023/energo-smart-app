@@ -1594,7 +1594,7 @@ async def get_property_devices(property_id: str, user_id: str = Depends(get_curr
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to fetch devices: {str(e)}")
 
-@router.post("/setup-scenario/{scenario}")
+@api_router.post("/setup-scenario/{scenario}")
 async def setup_usage_scenario(scenario: str, user_id: str = Depends(get_current_user)):
     """Set up a complete usage scenario (property + devices + mock data)"""
     if not PROPERTY_MANAGEMENT_ENABLED:
