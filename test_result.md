@@ -314,15 +314,18 @@ backend:
 
   - task: "Interactive AI Chat System"
     implemented: true
-    working: true
+    working: false
     file: "/app/backend/server.py"
-    stuck_count: 0
+    stuck_count: 1
     priority: "high"
     needs_retesting: false
     status_history:
         - working: true
           agent: "testing"
           comment: "POST /api/ai-chat endpoint working perfectly. Handles various message types, maintains session continuity, provides personalized energy advice based on user data and region. Session IDs maintained across conversations. AI responses are comprehensive and relevant."
+        - working: false
+          agent: "testing"
+          comment: "CRITICAL ISSUE: EMERGENT_LLM_KEY environment variable not configured. AI chat endpoints return 500 'AI service unavailable'. The endpoints exist and authentication works, but cannot connect to LLM service. This is the root cause of user's issue 'AI Chat not working'."
 
   - task: "AI Chat History System"
     implemented: true
