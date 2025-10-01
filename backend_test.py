@@ -1058,8 +1058,19 @@ class EnergoBackendTester:
         # Test invalid login
         self.test_invalid_login()
         
+        # Test property management features first (as requested by user)
+        print("\n🔹 Testing Property Management Features...")
+        property_mgmt_enabled = self.test_property_management_status()
+        self.test_usage_scenarios_endpoint()
+        self.test_device_templates_endpoint()
+        
         # Test protected endpoints (only if we have auth)
         if self.auth_token:
+            print("\n🔹 Testing Property Management (Authenticated)...")
+            self.test_properties_get_endpoint()
+            self.test_setup_scenario_endpoint()
+            self.test_create_property_endpoint()
+            
             print("\n🔹 Testing Existing Functionality...")
             self.test_dashboard_endpoint()
             self.test_ai_tips_endpoint()
