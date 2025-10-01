@@ -1570,7 +1570,15 @@ async def create_device(property_id: str, device_data: dict, user_id: str = Depe
         
         await db.devices.insert_one(device_dict)
         
-        return device_dict
+        # Return clean response without MongoDB _id
+        response_dict = device_dict.copy()
+        response_dict.pop("_id", None)  # Remove _id if it exists
+        
+        return {
+            "device_id": device_dict["id"],
+            "message": "Device created successfully",
+            "device": response_dict
+        }
         
     except HTTPException:
         raise
