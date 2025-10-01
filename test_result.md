@@ -434,7 +434,7 @@ backend:
 
   - task: "Device Management API"
     implemented: true
-    working: false
+    working: true
     file: "/app/backend/server.py"
     stuck_count: 1
     priority: "high"
@@ -443,6 +443,9 @@ backend:
         - working: false
           agent: "testing"
           comment: "PARTIAL FUNCTIONALITY: GET /api/device-templates works correctly (9 common devices, 20 total templates, 7 categories). POST /api/properties/{property_id}/devices returns 500 Internal Server Error due to ObjectId serialization issues, but devices are actually created successfully (confirmed by GET requests showing created devices). This is the root cause of user's issue 'Cannot add new equipment/devices' - the functionality works but returns error responses."
+        - working: true
+          agent: "testing"
+          comment: "ISSUE RESOLVED: Device management API now working correctly. Both GET /api/properties/{property_id}/devices (retrieves existing devices) and POST /api/properties/{property_id}/devices (creates new devices) are functioning properly. ObjectId serialization issues have been fixed. Successfully tested device creation with proper device_id returned. User's issue 'Cannot add new equipment/devices' is now fully resolved."
 
   - task: "Demo Scenario Setup API"
     implemented: true
