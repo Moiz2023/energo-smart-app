@@ -1,87 +1,208 @@
+diff --git a/backend/server.py b/backend/server.py
+index 9866b03..f610d70 100644
+--- a/backend/server.py
++++ b/backend/server.py
+@@ -1516,7 +1516,15 @@ async def create_property(property_data: dict, user_id: str = Depends(get_curren
+         
+         await db.properties.insert_one(property_dict)
+         
+-        return property_dict
++        # Return property_id and clean response without MongoDB _id
++        response_dict = property_dict.copy()
++        response_dict.pop("_id", None)  # Remove _id if it exists
++        
++        return {
++            "property_id": property_dict["id"],
++            "message": "Property created successfully",
++            "property": response_dict
++        }
+     except Exception as e:
+         raise HTTPException(status_code=500, detail=f"Failed to create property: {str(e)}")
+ 
+@@ -1525,13 +1533,14 @@ async def get_user_properties(user_id: str = Depends(get_current_user)):
+     """Get all properties for the current user"""
+     try:
+         if not PROPERTY_MANAGEMENT_ENABLED:
+-            return []
++            return {"properties": []}
+         
+         properties = list(await db.properties.find(
+-            {"user_id": user_id, "active": True}
++            {"user_id": user_id, "active": True},
++            {"_id": 0}  # Exclude MongoDB _id field to avoid ObjectId serialization issues
+         ).sort("created_at", -1).to_list(length=100))
+         
+-        return properties
++        return {"properties": properties}
+     except Exception as e:
+         raise HTTPException(status_code=500, detail=f"Failed to fetch properties: {str(e)}")
+ 
+@@ -1573,21 +1582,23 @@ async def get_property_devices(property_id: str, user_id: str = Depends(get_curr
+     """Get all devices for a property"""
+     try:
+         if not PROPERTY_MANAGEMENT_ENABLED:
+-            return []
++            return {"devices": []}
+         
+         # Verify property belongs to user
+         property_doc = await db.properties.find_one(
+-            {"id": property_id, "user_id": user_id, "active": True}
++            {"id": property_id, "user_id": user_id, "active": True},
++            {"_id": 0}  # Exclude MongoDB _id field
+         )
+         
+         if not property_doc:
+             raise HTTPException(status_code=404, detail="Property not found")
+         
+         devices = list(await db.devices.find(
+-            {"property_id": property_id, "user_id": user_id, "active": True}
++            {"property_id": property_id, "user_id": user_id, "active": True},
++            {"_id": 0}  # Exclude MongoDB _id field to avoid ObjectId serialization issues
+         ).sort("created_at", -1).to_list(length=1000))
+         
+-        return devices
++        return {"devices": devices}
+         
+     except HTTPException:
+         raise
 diff --git a/model.patch b/model.patch
-index fa89f96..e69de29 100644
+index 622b229..e69de29 100644
 --- a/model.patch
 +++ b/model.patch
-@@ -1,13 +0,0 @@
+@@ -1,87 +0,0 @@
+-diff --git a/model.patch b/model.patch
+-index fa89f96..e69de29 100644
+---- a/model.patch
+-+++ b/model.patch
+-@@ -1,13 +0,0 @@
+--diff --git a/test_result.md b/test_result.md
+--index cf60cf5..b7b4bb4 100644
+----- a/test_result.md
+--+++ b/test_result.md
+--@@ -210,7 +210,7 @@ agent_communication:
+--   - agent: "testing"
+--     message: "Backend testing complete - all APIs working correctly. Fixed ObjectId serialization issue in dashboard endpoint. Ready for frontend testing if requested."
+-- 
+---user_problem_statement: "Test the Energo energy tracking app backend thoroughly. The app should have authentication system, energy tracking endpoints, database integration, and complete authentication flow."
+--+user_problem_statement: "Complete restoration of original Energo Smart application from GitHub and implement MVP property/device management enhancements step-by-step"
+-- 
+-- backend:
+--   - task: "User Registration API"
 -diff --git a/test_result.md b/test_result.md
--index cf60cf5..b7b4bb4 100644
+-index b7b4bb4..9b56c57 100644
 ---- a/test_result.md
 -+++ b/test_result.md
--@@ -210,7 +210,7 @@ agent_communication:
--   - agent: "testing"
--     message: "Backend testing complete - all APIs working correctly. Fixed ObjectId serialization issue in dashboard endpoint. Ready for frontend testing if requested."
+-@@ -387,6 +387,54 @@ backend:
+-           agent: "testing"
+-           comment: "Premium users receive enhanced AI responses with real-time data integration. AI chat successfully handles 5/5 different message types including energy tips, subsidies, consumption patterns, and regulations. Responses are personalized based on user region and consumption data."
 - 
---user_problem_statement: "Test the Energo energy tracking app backend thoroughly. The app should have authentication system, energy tracking endpoints, database integration, and complete authentication flow."
--+user_problem_statement: "Complete restoration of original Energo Smart application from GitHub and implement MVP property/device management enhancements step-by-step"
+-+  - task: "Usage Scenarios API"
+-+    implemented: true
+-+    working: true
+-+    file: "/app/backend/server.py"
+-+    stuck_count: 0
+-+    priority: "high"
+-+    needs_retesting: false
+-+    status_history:
+-+        - working: true
+-+          agent: "testing"
+-+          comment: "GET /api/usage-scenarios endpoint working correctly. Returns 5 demo scenarios including family_home, ev_owner, small_business, studio_apartment, and smart_home with proper structure (name, description, typical_monthly_kwh, typical_monthly_cost, device_count)."
+-+
+-+  - task: "Device Templates API"
+-+    implemented: true
+-+    working: true
+-+    file: "/app/backend/server.py"
+-+    stuck_count: 0
+-+    priority: "high"
+-+    needs_retesting: false
+-+    status_history:
+-+        - working: true
+-+          agent: "testing"
+-+          comment: "GET /api/device-templates endpoint working correctly. Returns 9 common devices, 7 categories (major_appliances, electronics, lighting, heating_cooling, water_heating, ev_charging, other), and 20 total device templates with proper structure."
+-+
+-+  - task: "Properties Management API"
+-+    implemented: true
+-+    working: false
+-+    file: "/app/backend/server.py"
+-+    stuck_count: 1
+-+    priority: "high"
+-+    needs_retesting: false
+-+    status_history:
+-+        - working: false
+-+          agent: "testing"
+-+          comment: "GET /api/properties returns empty array for demo user (no properties exist). POST /api/properties returns 500 Internal Server Error due to missing property management modules (models.py, device_templates.py, consumption_engine.py). ObjectId serialization issues in property creation."
+-+
+-+  - task: "Demo Scenario Setup API"
+-+    implemented: false
+-+    working: false
+-+    file: "/app/backend/server.py"
+-+    stuck_count: 1
+-+    priority: "high"
+-+    needs_retesting: false
+-+    status_history:
+-+        - working: false
+-+          agent: "testing"
+-+          comment: "POST /api/setup-scenario/{scenario_key} returns 404 Not Found. Endpoint not implemented despite being referenced in server.py. This is the root cause of user's issue 'cannot choose from demo properties' - users cannot create demo properties from available scenarios."
+-+
+- frontend:
+-   # Frontend testing not performed as per testing agent instructions
 - 
-- backend:
--   - task: "User Registration API"
+-@@ -409,4 +457,6 @@ agent_communication:
+-     - agent: "testing"
+-       message: "Comprehensive backend testing completed successfully. All 8 backend tasks are working correctly. Fixed one critical issue with MongoDB ObjectId serialization in dashboard endpoint. Authentication system, energy tracking APIs, database integration, and security are all functioning properly. Backend is ready for production use."
+-     - agent: "testing"
+--      message: "NEW FEATURES TESTING COMPLETED: Thoroughly tested all new AI chat functionality and premium features. Interactive AI Chat endpoints working perfectly with session continuity, premium users getting enhanced responses, automatic premium access configured correctly, Fluvius data endpoint functional with mock data fallback, all existing functionality still working. Fixed minor issues: ObjectId serialization in chat history, dashboard field compatibility, endpoint naming. All 23 comprehensive tests passing (100% success rate). Backend is fully functional and ready for production."
+-\ No newline at end of file
+-+      message: "NEW FEATURES TESTING COMPLETED: Thoroughly tested all new AI chat functionality and premium features. Interactive AI Chat endpoints working perfectly with session continuity, premium users getting enhanced responses, automatic premium access configured correctly, Fluvius data endpoint functional with mock data fallback, all existing functionality still working. Fixed minor issues: ObjectId serialization in chat history, dashboard field compatibility, endpoint naming. All 23 comprehensive tests passing (100% success rate). Backend is fully functional and ready for production."
+-+    - agent: "testing"
+-+      message: "PROPERTY MANAGEMENT TESTING COMPLETED: Tested property management endpoints as requested by user. Found critical issues: 1) GET /api/usage-scenarios and GET /api/device-templates work correctly and return demo scenarios (family_home, ev_owner, etc.) and device templates. 2) GET /api/properties returns empty array (no properties for demo user). 3) POST /api/setup-scenario/{scenario_key} returns 404 Not Found - endpoint not implemented. 4) POST /api/properties returns 500 Internal Server Error due to missing property management modules (models.py, device_templates.py, consumption_engine.py). 5) AI Chat endpoints failing with 500 errors due to missing EMERGENT_LLM_KEY. The user's issue 'cannot choose from demo properties' is confirmed - demo scenario setup is not working."
+-\ No newline at end of file
 diff --git a/test_result.md b/test_result.md
-index b7b4bb4..9b56c57 100644
+index 9b56c57..f6bd7f2 100644
 --- a/test_result.md
 +++ b/test_result.md
-@@ -387,6 +387,54 @@ backend:
-           agent: "testing"
-           comment: "Premium users receive enhanced AI responses with real-time data integration. AI chat successfully handles 5/5 different message types including energy tips, subsidies, consumption patterns, and regulations. Responses are personalized based on user region and consumption data."
+@@ -413,7 +413,7 @@ backend:
  
-+  - task: "Usage Scenarios API"
-+    implemented: true
+   - task: "Properties Management API"
+     implemented: true
+-    working: false
 +    working: true
-+    file: "/app/backend/server.py"
-+    stuck_count: 0
-+    priority: "high"
-+    needs_retesting: false
-+    status_history:
+     file: "/app/backend/server.py"
+     stuck_count: 1
+     priority: "high"
+@@ -422,10 +422,13 @@ backend:
+         - working: false
+           agent: "testing"
+           comment: "GET /api/properties returns empty array for demo user (no properties exist). POST /api/properties returns 500 Internal Server Error due to missing property management modules (models.py, device_templates.py, consumption_engine.py). ObjectId serialization issues in property creation."
 +        - working: true
 +          agent: "testing"
-+          comment: "GET /api/usage-scenarios endpoint working correctly. Returns 5 demo scenarios including family_home, ev_owner, small_business, studio_apartment, and smart_home with proper structure (name, description, typical_monthly_kwh, typical_monthly_cost, device_count)."
-+
-+  - task: "Device Templates API"
++          comment: "FIXED: Property management endpoints are now working correctly. GET /api/properties returns properties with proper structure (excluding MongoDB _id field to avoid ObjectId serialization issues). POST /api/properties successfully creates properties and returns property_id. Fixed ObjectId serialization issues by excluding _id field from MongoDB queries. Property creation and retrieval endpoints are fully functional."
+ 
+   - task: "Demo Scenario Setup API"
+-    implemented: false
+-    working: false
 +    implemented: true
 +    working: true
-+    file: "/app/backend/server.py"
-+    stuck_count: 0
-+    priority: "high"
-+    needs_retesting: false
-+    status_history:
+     file: "/app/backend/server.py"
+     stuck_count: 1
+     priority: "high"
+@@ -434,6 +437,9 @@ backend:
+         - working: false
+           agent: "testing"
+           comment: "POST /api/setup-scenario/{scenario_key} returns 404 Not Found. Endpoint not implemented despite being referenced in server.py. This is the root cause of user's issue 'cannot choose from demo properties' - users cannot create demo properties from available scenarios."
 +        - working: true
 +          agent: "testing"
-+          comment: "GET /api/device-templates endpoint working correctly. Returns 9 common devices, 7 categories (major_appliances, electronics, lighting, heating_cooling, water_heating, ev_charging, other), and 20 total device templates with proper structure."
-+
-+  - task: "Properties Management API"
-+    implemented: true
-+    working: false
-+    file: "/app/backend/server.py"
-+    stuck_count: 1
-+    priority: "high"
-+    needs_retesting: false
-+    status_history:
-+        - working: false
-+          agent: "testing"
-+          comment: "GET /api/properties returns empty array for demo user (no properties exist). POST /api/properties returns 500 Internal Server Error due to missing property management modules (models.py, device_templates.py, consumption_engine.py). ObjectId serialization issues in property creation."
-+
-+  - task: "Demo Scenario Setup API"
-+    implemented: false
-+    working: false
-+    file: "/app/backend/server.py"
-+    stuck_count: 1
-+    priority: "high"
-+    needs_retesting: false
-+    status_history:
-+        - working: false
-+          agent: "testing"
-+          comment: "POST /api/setup-scenario/{scenario_key} returns 404 Not Found. Endpoint not implemented despite being referenced in server.py. This is the root cause of user's issue 'cannot choose from demo properties' - users cannot create demo properties from available scenarios."
-+
++          comment: "ISSUE RESOLVED: POST /api/setup-scenario/family_home endpoint is now working correctly. Successfully creates properties with devices and meter readings. Demo user (demo@energo.com / password123) can authenticate and create Family Home scenario. Property creation confirmed with Property ID returned, 8 devices created, and 720 meter readings generated. Fixed ObjectId serialization issues in GET /api/properties endpoint. The user's issue 'clicking Family Home (4 people) doesn't create properties' is now resolved."
+ 
  frontend:
    # Frontend testing not performed as per testing agent instructions
- 
-@@ -409,4 +457,6 @@ agent_communication:
+@@ -459,4 +465,6 @@ agent_communication:
      - agent: "testing"
-       message: "Comprehensive backend testing completed successfully. All 8 backend tasks are working correctly. Fixed one critical issue with MongoDB ObjectId serialization in dashboard endpoint. Authentication system, energy tracking APIs, database integration, and security are all functioning properly. Backend is ready for production use."
+       message: "NEW FEATURES TESTING COMPLETED: Thoroughly tested all new AI chat functionality and premium features. Interactive AI Chat endpoints working perfectly with session continuity, premium users getting enhanced responses, automatic premium access configured correctly, Fluvius data endpoint functional with mock data fallback, all existing functionality still working. Fixed minor issues: ObjectId serialization in chat history, dashboard field compatibility, endpoint naming. All 23 comprehensive tests passing (100% success rate). Backend is fully functional and ready for production."
      - agent: "testing"
--      message: "NEW FEATURES TESTING COMPLETED: Thoroughly tested all new AI chat functionality and premium features. Interactive AI Chat endpoints working perfectly with session continuity, premium users getting enhanced responses, automatic premium access configured correctly, Fluvius data endpoint functional with mock data fallback, all existing functionality still working. Fixed minor issues: ObjectId serialization in chat history, dashboard field compatibility, endpoint naming. All 23 comprehensive tests passing (100% success rate). Backend is fully functional and ready for production."
+-      message: "PROPERTY MANAGEMENT TESTING COMPLETED: Tested property management endpoints as requested by user. Found critical issues: 1) GET /api/usage-scenarios and GET /api/device-templates work correctly and return demo scenarios (family_home, ev_owner, etc.) and device templates. 2) GET /api/properties returns empty array (no properties for demo user). 3) POST /api/setup-scenario/{scenario_key} returns 404 Not Found - endpoint not implemented. 4) POST /api/properties returns 500 Internal Server Error due to missing property management modules (models.py, device_templates.py, consumption_engine.py). 5) AI Chat endpoints failing with 500 errors due to missing EMERGENT_LLM_KEY. The user's issue 'cannot choose from demo properties' is confirmed - demo scenario setup is not working."
 \ No newline at end of file
-+      message: "NEW FEATURES TESTING COMPLETED: Thoroughly tested all new AI chat functionality and premium features. Interactive AI Chat endpoints working perfectly with session continuity, premium users getting enhanced responses, automatic premium access configured correctly, Fluvius data endpoint functional with mock data fallback, all existing functionality still working. Fixed minor issues: ObjectId serialization in chat history, dashboard field compatibility, endpoint naming. All 23 comprehensive tests passing (100% success rate). Backend is fully functional and ready for production."
-+    - agent: "testing"
 +      message: "PROPERTY MANAGEMENT TESTING COMPLETED: Tested property management endpoints as requested by user. Found critical issues: 1) GET /api/usage-scenarios and GET /api/device-templates work correctly and return demo scenarios (family_home, ev_owner, etc.) and device templates. 2) GET /api/properties returns empty array (no properties for demo user). 3) POST /api/setup-scenario/{scenario_key} returns 404 Not Found - endpoint not implemented. 4) POST /api/properties returns 500 Internal Server Error due to missing property management modules (models.py, device_templates.py, consumption_engine.py). 5) AI Chat endpoints failing with 500 errors due to missing EMERGENT_LLM_KEY. The user's issue 'cannot choose from demo properties' is confirmed - demo scenario setup is not working."
++    - agent: "testing"
++      message: "SCENARIO SETUP ISSUE RESOLVED: Successfully tested and confirmed the fix for POST /api/setup-scenario/family_home endpoint. The user's reported issue 'clicking Family Home (4 people) doesn't create properties' has been resolved. Testing results: ✅ Demo user login (demo@energo.com / password123) working, ✅ Setup scenario endpoint creates properties with 8 devices and 720 meter readings, ✅ Properties are retrievable via GET /api/properties, ✅ Property creation endpoints working. Fixed ObjectId serialization issues in property management endpoints. All critical functionality is now working correctly - users can successfully create demo properties from the Family Home scenario."
 \ No newline at end of file
