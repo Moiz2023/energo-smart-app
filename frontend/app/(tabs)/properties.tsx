@@ -185,7 +185,8 @@ export default function Properties() {
 
       if (response.ok) {
         const data = await response.json();
-        setDevices(data);
+        const devicesList = data.devices || data; // Handle both formats
+        setDevices(devicesList);
       }
     } catch (error) {
       console.error('Error loading devices:', error);
