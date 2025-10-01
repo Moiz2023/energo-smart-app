@@ -461,6 +461,21 @@ backend:
         - working: true
           agent: "testing"
           comment: "ISSUE RESOLVED: POST /api/setup-scenario/family_home endpoint is now working correctly. Successfully creates properties with devices and meter readings. Demo user (demo@energo.com / password123) can authenticate and create Family Home scenario. Property creation confirmed with Property ID returned, 8 devices created, and 720 meter readings generated. Fixed ObjectId serialization issues in GET /api/properties endpoint. The user's issue 'clicking Family Home (4 people) doesn't create properties' is now resolved."
+        - working: true
+          agent: "testing"
+          comment: "COMPREHENSIVE SCENARIO TESTING COMPLETED: All scenario setup endpoints now working perfectly. Successfully tested POST /api/setup-scenario/ev_owner, POST /api/setup-scenario/small_business, and POST /api/setup-scenario/smart_home. All scenarios create properties with proper IDs returned. User's issue 'cannot select new scenarios' is fully resolved - all scenario types are now functional."
+
+  - task: "New Scenario Types (EV Owner, Small Business, Smart Home)"
+    implemented: true
+    working: true
+    file: "/app/backend/server.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+        - working: true
+          agent: "testing"
+          comment: "NEW SCENARIO TYPES WORKING: Successfully tested all new scenario endpoints. POST /api/setup-scenario/ev_owner creates EV owner properties, POST /api/setup-scenario/small_business creates business properties, POST /api/setup-scenario/smart_home creates smart home properties. All scenarios return proper property IDs and create functional properties. User can now select from multiple scenario types as requested."
 
 frontend:
   # Frontend testing not performed as per testing agent instructions
