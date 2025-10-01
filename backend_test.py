@@ -329,6 +329,244 @@ class EnergoBackendTester:
         
         return False
 
+    def test_ai_chat_functionality(self):
+        """Test AI Chat functionality - POST /api/ai-chat (USER REPORTED ISSUE)"""
+        print("\n🤖 Testing AI Chat Functionality (USER REPORTED ISSUE)...")
+        
+        if not self.auth_token:
+            self.log_result("AI Chat Functionality", False, "No authentication token available", is_critical=True)
+            return False
+        
+        # Test different types of messages
+        test_messages = [
+            {
+                "message": "Hello, can you help me with energy saving tips for my home?",
+                "description": "Basic greeting and energy advice request"
+            },
+            {
+                "message": "What are the current energy subsidies available in Brussels?",
+                "description": "Subsidy information request"
+            },
+            {
+                "message": "How can I reduce my evening energy consumption?",
+                "description": "Specific energy optimization question"
+            }
+        ]
+        
+        session_id = str(uuid.uuid4())
+        success_count = 0
+        
+        for i, test_msg in enumerate(test_messages):
+            try:
+                payload = {
+                    "message": test_msg["message"],
+                    "session_id": session_id
+                }
+                
+                response = self.session.post(
+                    f"{self.base_url}/ai-chat",
+                    json=payload,
+                    headers={"Authorization": f"Bearer {self.auth_token}"},
+                    timeout=60
+                )
+                
+                if response.status_code == 200:
+                    data = response.json()
+                    if data.get("response") and data.get("session_id"):
+                        self.log_result(f"AI Chat Message {i+1}", True, 
+                                      f"{test_msg['description']} - Response: {data['response'][:100]}...")
+                        success_count += 1
+                    else:
+                        self.log_result(f"AI Chat Message {i+1}", False, 
+                                      "Missing response or session_id in response", is_critical=True)
+                else:
+                    self.log_result(f"AI Chat Message {i+1}", False, 
+                                  f"Status: {response.status_code}, Response: {response.text}", is_critical=True)
+                    
+            except Exception as e:
+                self.log_result(f"AI Chat Message {i+1}", False, f"Exception: {str(e)}", is_critical=True)
+        
+        # Overall AI Chat functionality assessment
+        if success_count == len(test_messages):
+            self.log_result("AI Chat Functionality Overall", True, 
+                          f"All {success_count}/{len(test_messages)} AI chat messages successful", is_critical=True)
+            return True
+        elif success_count > 0:
+            self.log_result("AI Chat Functionality Overall", False, 
+                          f"Partial success: {success_count}/{len(test_messages)} messages worked", is_critical=True)
+        else:
+            self.log_result("AI Chat Functionality Overall", False, 
+                          "All AI chat messages failed", is_critical=True)
+        
+        return False
+
+    def test_ai_chat_history(self):
+        """Test AI Chat History - GET /api/ai-chat/history (USER REPORTED ISSUE)"""
+        print("\n📜 Testing AI Chat History (USER REPORTED ISSUE)...")
+        
+        if not self.auth_token:
+            self.log_result("AI Chat History", False, "No authentication token available", is_critical=True)
+            return False
+        
+        try:
+            response = self.session.get(
+                f"{self.base_url}/ai-chat/history",
+                headers={"Authorization": f"Bearer {self.auth_token}"},
+                timeout=30
+            )
+            
+            if response.status_code == 200:
+                data = response.json()
+                chat_history = data.get("chat_history", [])
+                
+                if isinstance(chat_history, list):
+                    self.log_result("AI Chat History", True, 
+                                  f"Retrieved {len(chat_history)} chat history items", is_critical=True)
+                    
+                    # Check if history items have required fields
+                    if chat_history:
+                        first_item = chat_history[0]
+                        required_fields = ["id", "message", "response", "timestamp", "session_id"]
+                        missing_fields = [field for field in required_fields if field not in first_item]
+                        
+                        if not missing_fields:
+                            self.log_result("AI Chat History Structure", True, 
+                                          "All required fields present in history items")
+                        else:
+                            self.log_result("AI Chat History Structure", False, 
+                                          f"Missing fields in history: {missing_fields}")
+                    return True
+                else:
+                    self.log_result("AI Chat History", False, 
+                                  "chat_history is not a list", is_critical=True)
+            else:
+                self.log_result("AI Chat History", False, 
+                              f"Status: {response.status_code}, Response: {response.text}", is_critical=True)
+                
+        except Exception as e:
+            self.log_result("AI Chat History", False, f"Exception: {str(e)}", is_critical=True)
+        
+        return False
+
+    def test_new_scenario_selection(self):
+        """Test new scenario selection endpoints (USER REPORTED ISSUE)"""
+        print("\n🏠 Testing New Scenario Selection (USER REPORTED ISSUE)...")
+        
+        if not self.auth_token:
+            self.log_result("New Scenario Selection", False, "No authentication token available", is_critical=True)
+            return False
+        
+        scenarios = ["ev_owner", "small_business", "smart_home"]
+        success_count = 0
+        
+        for scenario in scenarios:
+            try:
+                response = self.session.post(
+                    f"{self.base_url}/setup-scenario/{scenario}",
+                    json={},
+                    headers={"Authorization": f"Bearer {self.auth_token}"},
+                    timeout=30
+                )
+                
+                if response.status_code == 200:
+                    data = response.json()
+                    if data.get("property_id"):
+                        self.log_result(f"Setup Scenario: {scenario}", True, 
+                                      f"Property created with ID: {data['property_id']}")
+                        success_count += 1
+                    else:
+                        self.log_result(f"Setup Scenario: {scenario}", False, 
+                                      "No property_id returned", is_critical=True)
+                else:
+                    self.log_result(f"Setup Scenario: {scenario}", False, 
+                                  f"Status: {response.status_code}, Response: {response.text}", is_critical=True)
+                    
+            except Exception as e:
+                self.log_result(f"Setup Scenario: {scenario}", False, f"Exception: {str(e)}", is_critical=True)
+        
+        # Overall assessment
+        if success_count == len(scenarios):
+            self.log_result("New Scenario Selection Overall", True, 
+                          f"All {success_count}/{len(scenarios)} scenarios working", is_critical=True)
+            return True
+        elif success_count > 0:
+            self.log_result("New Scenario Selection Overall", False, 
+                          f"Partial success: {success_count}/{len(scenarios)} scenarios working", is_critical=True)
+        else:
+            self.log_result("New Scenario Selection Overall", False, 
+                          "All scenario selections failed", is_critical=True)
+        
+        return False
+
+    def test_device_equipment_addition(self, property_id):
+        """Test device/equipment addition functionality (USER REPORTED ISSUE)"""
+        print(f"\n⚡ Testing Device/Equipment Addition (USER REPORTED ISSUE)...")
+        
+        if not property_id:
+            self.log_result("Device Equipment Addition", False, "No property ID available for testing", is_critical=True)
+            return False
+        
+        if not self.auth_token:
+            self.log_result("Device Equipment Addition", False, "No authentication token available", is_critical=True)
+            return False
+        
+        # Test GET /api/properties/{property_id}/devices first
+        try:
+            get_url = f"{self.base_url}/properties/{property_id}/devices"
+            response = self.session.get(
+                get_url,
+                headers={"Authorization": f"Bearer {self.auth_token}"},
+                timeout=30
+            )
+            
+            if response.status_code == 200:
+                data = response.json()
+                devices = data.get("devices", [])
+                self.log_result("Device Retrieval", True, 
+                              f"Retrieved {len(devices)} devices for property {property_id}")
+            else:
+                self.log_result("Device Retrieval", False, 
+                              f"Status: {response.status_code}, Response: {response.text}")
+                
+        except Exception as e:
+            self.log_result("Device Retrieval", False, f"Exception: {str(e)}")
+        
+        # Test POST /api/properties/{property_id}/devices
+        device_data = {
+            "name": "Test Energy Monitor",
+            "device_type": "energy_monitor",
+            "power_rating": 5,
+            "usage_hours_per_day": 24,
+            "location": "Main Panel"
+        }
+        
+        try:
+            post_url = f"{self.base_url}/properties/{property_id}/devices"
+            response = self.session.post(
+                post_url,
+                json=device_data,
+                headers={"Authorization": f"Bearer {self.auth_token}"},
+                timeout=30
+            )
+            
+            if response.status_code == 200:
+                data = response.json()
+                if data.get("device_id"):
+                    self.log_result("Device Creation", True, 
+                                  f"Device created with ID: {data['device_id']}", is_critical=True)
+                    return True
+                else:
+                    self.log_result("Device Creation", False, 
+                                  "No device_id returned", is_critical=True)
+            else:
+                self.log_result("Device Creation", False, 
+                              f"Status: {response.status_code}, Response: {response.text}", is_critical=True)
+                
+        except Exception as e:
+            self.log_result("Device Creation", False, f"Exception: {str(e)}", is_critical=True)
+        
+        return False
+
     def run_comprehensive_test(self):
         """Run all tests in sequence focusing on scenario setup"""
         print("🎯 FOCUS: Testing Family Home Scenario Setup")
