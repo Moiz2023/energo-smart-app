@@ -424,8 +424,8 @@ backend:
           comment: "GET /api/properties returns empty array for demo user (no properties exist). POST /api/properties returns 500 Internal Server Error due to missing property management modules (models.py, device_templates.py, consumption_engine.py). ObjectId serialization issues in property creation."
 
   - task: "Demo Scenario Setup API"
-    implemented: false
-    working: false
+    implemented: true
+    working: true
     file: "/app/backend/server.py"
     stuck_count: 1
     priority: "high"
@@ -434,6 +434,9 @@ backend:
         - working: false
           agent: "testing"
           comment: "POST /api/setup-scenario/{scenario_key} returns 404 Not Found. Endpoint not implemented despite being referenced in server.py. This is the root cause of user's issue 'cannot choose from demo properties' - users cannot create demo properties from available scenarios."
+        - working: true
+          agent: "testing"
+          comment: "ISSUE RESOLVED: POST /api/setup-scenario/family_home endpoint is now working correctly. Successfully creates properties with devices and meter readings. Demo user (demo@energo.com / password123) can authenticate and create Family Home scenario. Property creation confirmed with Property ID returned, 8 devices created, and 720 meter readings generated. Fixed ObjectId serialization issues in GET /api/properties endpoint. The user's issue 'clicking Family Home (4 people) doesn't create properties' is now resolved."
 
 frontend:
   # Frontend testing not performed as per testing agent instructions
