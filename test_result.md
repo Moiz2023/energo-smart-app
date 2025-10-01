@@ -387,6 +387,54 @@ backend:
           agent: "testing"
           comment: "Premium users receive enhanced AI responses with real-time data integration. AI chat successfully handles 5/5 different message types including energy tips, subsidies, consumption patterns, and regulations. Responses are personalized based on user region and consumption data."
 
+  - task: "Usage Scenarios API"
+    implemented: true
+    working: true
+    file: "/app/backend/server.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+        - working: true
+          agent: "testing"
+          comment: "GET /api/usage-scenarios endpoint working correctly. Returns 5 demo scenarios including family_home, ev_owner, small_business, studio_apartment, and smart_home with proper structure (name, description, typical_monthly_kwh, typical_monthly_cost, device_count)."
+
+  - task: "Device Templates API"
+    implemented: true
+    working: true
+    file: "/app/backend/server.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+        - working: true
+          agent: "testing"
+          comment: "GET /api/device-templates endpoint working correctly. Returns 9 common devices, 7 categories (major_appliances, electronics, lighting, heating_cooling, water_heating, ev_charging, other), and 20 total device templates with proper structure."
+
+  - task: "Properties Management API"
+    implemented: true
+    working: false
+    file: "/app/backend/server.py"
+    stuck_count: 1
+    priority: "high"
+    needs_retesting: false
+    status_history:
+        - working: false
+          agent: "testing"
+          comment: "GET /api/properties returns empty array for demo user (no properties exist). POST /api/properties returns 500 Internal Server Error due to missing property management modules (models.py, device_templates.py, consumption_engine.py). ObjectId serialization issues in property creation."
+
+  - task: "Demo Scenario Setup API"
+    implemented: false
+    working: false
+    file: "/app/backend/server.py"
+    stuck_count: 1
+    priority: "high"
+    needs_retesting: false
+    status_history:
+        - working: false
+          agent: "testing"
+          comment: "POST /api/setup-scenario/{scenario_key} returns 404 Not Found. Endpoint not implemented despite being referenced in server.py. This is the root cause of user's issue 'cannot choose from demo properties' - users cannot create demo properties from available scenarios."
+
 frontend:
   # Frontend testing not performed as per testing agent instructions
 
