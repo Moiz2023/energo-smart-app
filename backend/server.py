@@ -1574,21 +1574,23 @@ async def get_property_devices(property_id: str, user_id: str = Depends(get_curr
     """Get all devices for a property"""
     try:
         if not PROPERTY_MANAGEMENT_ENABLED:
-            return []
+            return {"devices": []}
         
         # Verify property belongs to user
         property_doc = await db.properties.find_one(
-            {"id": property_id, "user_id": user_id, "active": True}
+            {"id": property_id, "user_id": user_id, "active": True},
+            {"_id": 0}  # Exclude MongoDB _id field
         )
         
         if not property_doc:
             raise HTTPException(status_code=404, detail="Property not found")
         
         devices = list(await db.devices.find(
-            {"property_id": property_id, "user_id": user_id, "active": True}
+            {"property_id": property_id, "user_id": user_id, "active": True},
+            {"_id": 0}  # Exclude MongoDB _id field to avoid ObjectId serialization issues
         ).sort("created_at", -1).to_list(length=1000))
         
-        return devices
+        return {"devices": devices}
         
     except HTTPException:
         raise
