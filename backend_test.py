@@ -1,12 +1,17 @@
 #!/usr/bin/env python3
 """
 Backend API Testing Suite for Energo Smart Energy Management
-Focus: Testing POST /api/setup-scenario/{scenario_key} endpoint and related functionality
+Focus: Testing all user-reported issues after main agent fixes:
+1. AI Chat functionality (POST /api/ai-chat, GET /api/ai-chat/history)
+2. New scenario selection (POST /api/setup-scenario/{scenario_key})
+3. Device/equipment addition (POST /api/properties/{property_id}/devices)
+4. Property management (GET /api/properties)
 """
 
 import requests
 import json
 import time
+import uuid
 from datetime import datetime
 import sys
 import os
