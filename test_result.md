@@ -429,6 +429,18 @@ backend:
           agent: "testing"
           comment: "FIXED: Property management endpoints are now working correctly. GET /api/properties returns properties with proper structure (excluding MongoDB _id field to avoid ObjectId serialization issues). POST /api/properties successfully creates properties and returns property_id. Fixed ObjectId serialization issues by excluding _id field from MongoDB queries. Property creation and retrieval endpoints are fully functional."
 
+  - task: "Device Management API"
+    implemented: true
+    working: false
+    file: "/app/backend/server.py"
+    stuck_count: 1
+    priority: "high"
+    needs_retesting: false
+    status_history:
+        - working: false
+          agent: "testing"
+          comment: "PARTIAL FUNCTIONALITY: GET /api/device-templates works correctly (9 common devices, 20 total templates, 7 categories). POST /api/properties/{property_id}/devices returns 500 Internal Server Error due to ObjectId serialization issues, but devices are actually created successfully (confirmed by GET requests showing created devices). This is the root cause of user's issue 'Cannot add new equipment/devices' - the functionality works but returns error responses."
+
   - task: "Demo Scenario Setup API"
     implemented: true
     working: true
