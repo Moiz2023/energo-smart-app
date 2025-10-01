@@ -413,7 +413,7 @@ backend:
 
   - task: "Properties Management API"
     implemented: true
-    working: false
+    working: true
     file: "/app/backend/server.py"
     stuck_count: 1
     priority: "high"
@@ -422,6 +422,9 @@ backend:
         - working: false
           agent: "testing"
           comment: "GET /api/properties returns empty array for demo user (no properties exist). POST /api/properties returns 500 Internal Server Error due to missing property management modules (models.py, device_templates.py, consumption_engine.py). ObjectId serialization issues in property creation."
+        - working: true
+          agent: "testing"
+          comment: "FIXED: Property management endpoints are now working correctly. GET /api/properties returns properties with proper structure (excluding MongoDB _id field to avoid ObjectId serialization issues). POST /api/properties successfully creates properties and returns property_id. Fixed ObjectId serialization issues by excluding _id field from MongoDB queries. Property creation and retrieval endpoints are fully functional."
 
   - task: "Demo Scenario Setup API"
     implemented: true
