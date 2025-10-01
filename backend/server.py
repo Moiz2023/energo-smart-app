@@ -1525,13 +1525,14 @@ async def get_user_properties(user_id: str = Depends(get_current_user)):
     """Get all properties for the current user"""
     try:
         if not PROPERTY_MANAGEMENT_ENABLED:
-            return []
+            return {"properties": []}
         
         properties = list(await db.properties.find(
-            {"user_id": user_id, "active": True}
+            {"user_id": user_id, "active": True},
+            {"_id": 0}  # Exclude MongoDB _id field to avoid ObjectId serialization issues
         ).sort("created_at", -1).to_list(length=100))
         
-        return properties
+        return {"properties": properties}
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to fetch properties: {str(e)}")
 
