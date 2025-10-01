@@ -48,13 +48,17 @@ class EnergoBackendTester:
             "critical_failures": []
         }
 
-    def log_result(self, test_name, success, message=""):
+    def log_result(self, test_name, success, message="", is_critical=False):
         self.results["total_tests"] += 1
         if success:
             self.results["passed"] += 1
             print(f"✅ {test_name}: PASSED {message}")
         else:
             self.results["failed"] += 1
+            print(f"❌ {test_name}: FAILED {message}")
+            self.results["errors"].append(f"{test_name}: {message}")
+            if is_critical:
+                self.results["critical_failures"].append(test_name)
             self.results["errors"].append(f"{test_name}: {message}")
             print(f"❌ {test_name}: FAILED {message}")
 
