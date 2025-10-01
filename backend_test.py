@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
-Comprehensive Backend Testing for Energo Energy Tracking App
-Tests all authentication and energy tracking endpoints
+Backend API Testing Suite for Energo Smart Energy Management
+Focus: Testing POST /api/setup-scenario/{scenario_key} endpoint and related functionality
 """
 
 import requests
@@ -24,21 +24,28 @@ def get_backend_url():
     return "https://energo-reset.preview.emergentagent.com/api"
 
 BASE_URL = get_backend_url()
-print(f"Testing backend at: {BASE_URL}")
+print(f"🚀 Testing Energo Backend API at: {BASE_URL}")
+print("Focus: POST /api/setup-scenario/family_home endpoint")
+print("=" * 60)
+
+# Demo user credentials as specified in the review request
+DEMO_USER = {
+    "email": "demo@energo.com",
+    "password": "password123"
+}
 
 class EnergoBackendTester:
     def __init__(self):
         self.base_url = BASE_URL
         self.session = requests.Session()
         self.auth_token = None
-        self.test_user_email = "sarah.johnson@energotest.com"
-        self.test_user_password = "SecurePass123!"
-        self.test_user_name = "Sarah Johnson"
+        self.user_id = None
         self.results = {
             "total_tests": 0,
             "passed": 0,
             "failed": 0,
-            "errors": []
+            "errors": [],
+            "critical_failures": []
         }
 
     def log_result(self, test_name, success, message=""):
