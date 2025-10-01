@@ -16,12 +16,12 @@ def get_backend_url():
     try:
         with open('/app/frontend/.env', 'r') as f:
             for line in f:
-                if line.startswith('EXPO_PUBLIC_BACKEND_URL='):
+                if line.startswith('EXPO_PACKAGER_PROXY_URL='):
                     base_url = line.split('=')[1].strip().strip('"')
                     return f"{base_url}/api"
     except Exception as e:
         print(f"Error reading frontend .env: {e}")
-    return "https://energo-premium.preview.emergentagent.com/api"
+    return "https://energo-reset.preview.emergentagent.com/api"
 
 BASE_URL = get_backend_url()
 print(f"Testing backend at: {BASE_URL}")
